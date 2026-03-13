@@ -2,10 +2,8 @@
 
 ## Meta-project setup
 
-- [ ] Adapt the self-improvement measurement plan to Youji's repo with 3-5 concrete metrics [requires-opus] [skill: design] [zero-resource]
-  Why: The adapted plan shows the pattern, but Youji's deployment needs its own metrics, denominators, and failure modes grounded in actual operational data.
-  Done when: A repo-specific measurement plan exists with 3-5 concrete metrics and explicit data sources.
-  Priority: high
+- [x] Adapt the self-improvement measurement plan to Youji's repo with 3-5 concrete metrics [requires-opus] [skill: design] [zero-resource]
+  Done: plans/self-improvement-measurement.md rewritten with 5 concrete metrics (M1-M5), each with data sources, computation formulas, baselines from first 4 sessions, and an interpretation framework.
 
 - [x] Run first self-audit of convention compliance [skill: self-audit] [zero-resource]
   Done: compliance-audit-2026-03-14.md — 6/8 checks passing.
