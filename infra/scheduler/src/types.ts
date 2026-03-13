@@ -24,6 +24,8 @@ export interface SessionResult {
   durationMs: number;
   /** Session label */
   label: string;
+  /** Captured stdout (last 2000 chars) */
+  output?: string;
   /** Error message if failed */
   error?: string;
 }

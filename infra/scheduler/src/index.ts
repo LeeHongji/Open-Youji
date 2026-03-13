@@ -56,6 +56,8 @@ async function runSupervisor(scheduler: Scheduler): Promise<void> {
 
     const result = await spawnSession(config);
     log(`Supervisor ${sessionId} finished: ${result.success ? 'OK' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s)`);
+    if (result.output) log(`Output (last 2000 chars):\n${result.output}`);
+    if (result.error) log(`Error: ${result.error}`);
 
     // Post-session: auto-commit any remaining orphans
     autoCommitOrphans(repoDir);

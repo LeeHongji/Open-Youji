@@ -96,9 +96,15 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
 
     const child = spawn('claude', args, {
       cwd: config.cwd,
-      stdio: 'pipe',
+      stdio: ['pipe', 'pipe', 'pipe'],
       env,
     });
+
+    // Capture output for logging
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
 
     // Enforce max duration
     const timeout = setTimeout(() => {
@@ -112,7 +118,8 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
         exitCode: code ?? 1,
         durationMs: Date.now() - startTime,
         label: config.label,
-        error: code !== 0 ? `Process exited with code ${code}` : undefined,
+        output: stdout.slice(-2000),  // Last 2000 chars
+        error: code !== 0 ? `Process exited with code ${code}${stderr ? ': ' + stderr.slice(-500) : ''}` : undefined,
       });
     });
 
