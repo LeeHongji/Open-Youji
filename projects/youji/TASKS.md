@@ -21,6 +21,14 @@
   Why: Follow-up from diagnosis/orphaned-commit-attribution-loss.md — need to determine if 40% rate is bootstrapping noise or recurring pattern.
   Done when: After 5 more autonomous sessions, compute orphaned commit % and decide whether to implement Fix 1 (descriptive auto-commit messages).
   Priority: low
+  Progress (cycle 002, session 5): Rate dropped from 40% to 33.3%. Key finding: all orphaned commits are from interactive sessions (5/5), autonomous sessions produce 0% orphaned. Still need 3 more autonomous sessions before final decision. See findings/measurement-cycle-002-2026-03-14.md.
+
+## Ongoing measurement
+
+- [ ] Run measurement cycle 003 after 5 more autonomous sessions [fleet-eligible] [zero-resource]
+  Why: M5 (System Learning Rate) declined from 1.0 to 0.5/session. Need third data point to determine if this is a trend or stabilization. Also tracks whether M1 compliance holds at 100%.
+  Done when: findings/measurement-cycle-003-*.md exists with all 5 metrics computed and compared to cycles 001-002.
+  Priority: medium
 
 - [x] Add one local example of a successful self-improvement loop [skill: compound] [zero-resource]
   Done: findings/self-improvement-loop-001-infra-logging.md — complete 4-stage loop (detect → task → fix → verify) for infra-only session logging convention gap. Zero human intervention, completed across 2 autonomous sessions.
