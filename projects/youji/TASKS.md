@@ -11,10 +11,8 @@
 - [x] Document convention for infra-only sessions: add logging requirement to session-discipline.md [zero-resource]
   Done: session-discipline.md now contains "Infra-only sessions" section routing infra changes to projects/youji/README.md.
 
-- [ ] Measure human intervention rate in Youji deployment [skill: analyze] [zero-resource]
-  Why: A decreasing intervention rate is one of the clearest signals that the system is becoming more autonomous.
-  Done when: A short analysis computes intervention events per session over at least 2 time windows and records the result.
-  Priority: medium
+- [x] Measure human intervention rate in Youji deployment [skill: analyze] [zero-resource]
+  Done: findings/human-intervention-rate-2026-03-14.md — M4 = 0.33/session overall (1.0 pre-fix → 0.0 post-fix). Single critical infrastructure intervention (stdin blocking); zero task-level interventions.
 
 - [ ] Write one self-observation diagnosis from operational evidence [requires-opus] [skill: diagnose] [zero-resource]
   Why: The meta-project only becomes real when the system diagnoses its own failure modes from its own logs and artifacts.
