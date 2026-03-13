@@ -13,7 +13,7 @@ describe('loadConfig', () => {
     expect(config.fleetModel).toBe('sonnet');
     expect(config.supervisorTimeoutMs).toBe(60 * 60 * 1000);
     expect(config.fleetTimeoutMs).toBe(20 * 60 * 1000);
-    expect(config.supervisorBudgetUsd).toBe(15.00);
+    expect(config.supervisorBudgetUsd).toBe(5.00);
     expect(config.fleetBudgetUsd).toBe(1.00);
   });
 

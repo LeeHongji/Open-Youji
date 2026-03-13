@@ -20,7 +20,7 @@ export function loadConfig(
     fleetModel: env.FLEET_MODEL ?? 'sonnet',
     supervisorTimeoutMs: parseInt(env.SUPERVISOR_TIMEOUT_MS ?? String(60 * 60 * 1000), 10),
     fleetTimeoutMs: parseInt(env.FLEET_TIMEOUT_MS ?? String(20 * 60 * 1000), 10),
-    supervisorBudgetUsd: parseFloat(env.SUPERVISOR_BUDGET_USD ?? '15.00'),
+    supervisorBudgetUsd: parseFloat(env.SUPERVISOR_BUDGET_USD ?? '5.00'),
     fleetBudgetUsd: parseFloat(env.FLEET_BUDGET_USD ?? '1.00'),
   };
 }
