@@ -3,7 +3,13 @@
  */
 
 import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
 import type { SessionConfig, SessionResult, FleetTask } from './types.js';
+
+/** Path to the lightweight autonomous settings (disables all plugins). */
+export function getAutonomousSettingsPath(repoDir: string): string {
+  return resolve(repoDir, 'infra/scheduler/settings-autonomous.json');
+}
 
 /** Build the prompt for a supervisor (Opus) session. */
 export function buildSupervisorPrompt(repoDir: string): string {
@@ -11,9 +17,9 @@ export function buildSupervisorPrompt(repoDir: string): string {
 
 Execute the autonomous work cycle:
 
-1. Run /orient to assess repo state and select the highest-leverage task.
+1. Run /orient fast to assess repo state and select the highest-leverage task.
 2. Execute the selected task. Commit incrementally after each logical unit of work.
-3. Run /compound to embed session learnings.
+3. If you completed 3 or more tasks, run /compound to embed session learnings. Otherwise skip — small sessions don't need it.
 4. Write a session log entry to the project README.
 5. Run: git push
 
@@ -23,6 +29,7 @@ Rules:
 - Never sleep more than 30 seconds.
 - Commit incrementally — do not defer all commits to the end.
 - If no actionable tasks exist, log "no actionable tasks" and end cleanly.
+- Budget is limited. Be efficient — prefer /orient fast over /orient full.
 
 Working directory: ${repoDir}`;
 }
@@ -85,6 +92,7 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
       '--permission-mode', 'bypassPermissions',
       '--output-format', 'text',
       '--no-session-persistence',
+      '--settings', getAutonomousSettingsPath(config.cwd),
     ];
 
     if (config.maxBudgetUsd !== undefined && config.maxBudgetUsd > 0) {

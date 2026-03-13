@@ -1,0 +1,26 @@
+{
+  "enabledPlugins": {
+    "document-skills@anthropic-agent-skills": false,
+    "example-skills@anthropic-agent-skills": false,
+    "tokenization@ai-research-skills": false,
+    "fine-tuning@ai-research-skills": false,
+    "post-training@ai-research-skills": false,
+    "inference-serving@ai-research-skills": false,
+    "distributed-training@ai-research-skills": false,
+    "optimization@ai-research-skills": false,
+    "everything-claude-code@everything-claude-code": false,
+    "claude-mem@thedotmack": false,
+    "frontend-design@claude-plugins-official": false,
+    "context7@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": false,
+    "code-review@claude-plugins-official": false,
+    "github@claude-plugins-official": false,
+    "playwright@claude-plugins-official": false,
+    "feature-dev@claude-plugins-official": false,
+    "code-simplifier@claude-plugins-official": false,
+    "ralph-loop@claude-plugins-official": false,
+    "commit-commands@claude-plugins-official": false
+  },
+  "hooks": {},
+  "statusLine": null
+}
