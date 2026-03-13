@@ -17,11 +17,8 @@
 - [x] Write one self-observation diagnosis from operational evidence [requires-opus] [skill: diagnose] [zero-resource]
   Done: diagnosis/orphaned-commit-attribution-loss.md — 40% of commits are generic orphaned-file auto-commits (273 lines of changes with no context). Root cause: interactive sessions not committing incrementally. Proposed 3 fixes with monitoring follow-up.
 
-- [ ] Monitor orphaned commit rate over next 5 sessions [fleet-eligible] [zero-resource]
-  Why: Follow-up from diagnosis/orphaned-commit-attribution-loss.md — need to determine if 40% rate is bootstrapping noise or recurring pattern.
-  Done when: After 5 more autonomous sessions, compute orphaned commit % and decide whether to implement Fix 1 (descriptive auto-commit messages).
-  Priority: low
-  Progress (cycle 002, session 5): Rate dropped from 40% to 33.3%. Key finding: all orphaned commits are from interactive sessions (5/5), autonomous sessions produce 0% orphaned. Still need 3 more autonomous sessions before final decision. See findings/measurement-cycle-002-2026-03-14.md.
+- [x] Monitor orphaned commit rate over next 5 sessions [fleet-eligible] [zero-resource]
+  Done: Rate stabilized at 34.8% (above 20% threshold). 100% of orphaned commits from interactive sessions, 0% from autonomous. Implemented Fix 1 (descriptive auto-commit messages). See findings/orphaned-commit-monitoring-conclusion.md.
 
 ## Ongoing measurement
 

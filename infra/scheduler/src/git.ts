@@ -38,6 +38,24 @@ function getChangedFiles(repoDir: string): string[] {
   return [...all];
 }
 
+/** Build a descriptive commit message from orphaned file paths. */
+function buildOrphanSummary(files: string[]): string {
+  const MAX_LENGTH = 72;
+  const prefix = 'auto-commit: orphaned changes — ';
+
+  // Use basenames for brevity, deduplicate
+  const names = [...new Set(files.map(f => f.split('/').pop() ?? f))];
+
+  let body = names.join(', ');
+  if (prefix.length + body.length > MAX_LENGTH) {
+    // Truncate with count
+    body = `${names.slice(0, 3).join(', ')} (+${files.length - 3} more)`;
+  }
+
+  // Escape double quotes for shell safety
+  return (prefix + body).replace(/"/g, '\\"');
+}
+
 /** Auto-commit any uncommitted files left by a previous session. */
 export function autoCommitOrphans(repoDir: string): boolean {
   const files = getChangedFiles(repoDir);
@@ -78,10 +96,9 @@ export function autoCommitOrphans(repoDir: string): boolean {
   for (const file of safe) {
     execSync(`git add -- "${file}"`, { cwd: repoDir });
   }
-  execSync(
-    'git commit -m "auto-commit: orphaned files from previous session"',
-    { cwd: repoDir },
-  );
+
+  const summary = buildOrphanSummary(safe);
+  execSync(`git commit -m "${summary}"`, { cwd: repoDir });
 
   return true;
 }

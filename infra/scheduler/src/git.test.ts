@@ -20,7 +20,7 @@ describe('autoCommitOrphans', () => {
     expect(committed).toBe(false);
   });
 
-  it('commits when there are uncommitted files', () => {
+  it('commits with descriptive message listing changed files', () => {
     mockExecSync
       .mockReturnValueOnce(Buffer.from('file.md\n'))    // git diff --name-only
       .mockReturnValueOnce(Buffer.from(''))              // git diff --cached --name-only
@@ -32,6 +32,11 @@ describe('autoCommitOrphans', () => {
     expect(committed).toBe(true);
     // 3 detection + 2 adds + 1 commit = 6
     expect(mockExecSync).toHaveBeenCalledTimes(6);
+    // Verify commit message is descriptive (not generic)
+    const commitCall = mockExecSync.mock.calls[5][0] as string;
+    expect(commitCall).toContain('auto-commit: orphaned changes');
+    expect(commitCall).toContain('file.md');
+    expect(commitCall).toContain('new.md');
   });
 
   it('skips sensitive files', () => {
