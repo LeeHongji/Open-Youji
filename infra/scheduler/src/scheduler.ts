@@ -13,9 +13,15 @@ export function loadConfig(
   return {
     cron: env.CRON_SCHEDULE ?? '0 * * * *',
     repoDir,
-    maxConcurrent: parseInt(env.MAX_CONCURRENT ?? '1', 10),
-    fleetSize: parseInt(env.FLEET_SIZE ?? '0', 10),
+    maxConcurrent: parseInt(env.MAX_CONCURRENT ?? '4', 10),
+    fleetSize: parseInt(env.FLEET_SIZE ?? '2', 10),
     apiPort: parseInt(env.API_PORT ?? '8420', 10),
+    supervisorModel: env.SUPERVISOR_MODEL ?? 'opus',
+    fleetModel: env.FLEET_MODEL ?? 'sonnet',
+    supervisorTimeoutMs: parseInt(env.SUPERVISOR_TIMEOUT_MS ?? String(60 * 60 * 1000), 10),
+    fleetTimeoutMs: parseInt(env.FLEET_TIMEOUT_MS ?? String(20 * 60 * 1000), 10),
+    supervisorBudgetUsd: parseFloat(env.SUPERVISOR_BUDGET_USD ?? '5.00'),
+    fleetBudgetUsd: parseFloat(env.FLEET_BUDGET_USD ?? '1.00'),
   };
 }
 

@@ -12,19 +12,39 @@ describe('autoCommitOrphans', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('does nothing when working tree is clean', () => {
-    mockExecSync.mockReturnValueOnce(Buffer.from(''));
+    mockExecSync
+      .mockReturnValueOnce(Buffer.from(''))   // git diff --name-only
+      .mockReturnValueOnce(Buffer.from(''))   // git diff --cached --name-only
+      .mockReturnValueOnce(Buffer.from(''));   // git ls-files --others
     const committed = autoCommitOrphans('/repo');
     expect(committed).toBe(false);
   });
 
   it('commits when there are uncommitted files', () => {
     mockExecSync
-      .mockReturnValueOnce(Buffer.from('M  file.md\n?? new.md\n'))
-      .mockReturnValueOnce(Buffer.from(''))
-      .mockReturnValueOnce(Buffer.from(''));
+      .mockReturnValueOnce(Buffer.from('file.md\n'))    // git diff --name-only
+      .mockReturnValueOnce(Buffer.from(''))              // git diff --cached --name-only
+      .mockReturnValueOnce(Buffer.from('new.md\n'))      // git ls-files --others
+      .mockReturnValueOnce(Buffer.from(''))              // git add -- file.md
+      .mockReturnValueOnce(Buffer.from(''))              // git add -- new.md
+      .mockReturnValueOnce(Buffer.from(''));             // git commit
     const committed = autoCommitOrphans('/repo');
     expect(committed).toBe(true);
-    expect(mockExecSync).toHaveBeenCalledTimes(3);
+    // 3 detection + 2 adds + 1 commit = 6
+    expect(mockExecSync).toHaveBeenCalledTimes(6);
+  });
+
+  it('skips sensitive files', () => {
+    mockExecSync
+      .mockReturnValueOnce(Buffer.from(''))              // git diff --name-only
+      .mockReturnValueOnce(Buffer.from(''))              // git diff --cached --name-only
+      .mockReturnValueOnce(Buffer.from('.env\nreadme.md\n'))  // git ls-files --others
+      .mockReturnValueOnce(Buffer.from(''))              // git add -- readme.md
+      .mockReturnValueOnce(Buffer.from(''));             // git commit
+    const committed = autoCommitOrphans('/repo');
+    expect(committed).toBe(true);
+    // 3 detection + 1 add (skips .env) + 1 commit = 5
+    expect(mockExecSync).toHaveBeenCalledTimes(5);
   });
 });
 

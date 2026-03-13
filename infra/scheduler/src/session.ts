@@ -83,7 +83,13 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
       '-p', config.prompt,
       '--model', config.model,
       '--permission-mode', 'bypassPermissions',
+      '--output-format', 'text',
+      '--no-session-persistence',
     ];
+
+    if (config.maxBudgetUsd !== undefined && config.maxBudgetUsd > 0) {
+      args.push('--max-budget-usd', String(config.maxBudgetUsd));
+    }
 
     if (config.flags) {
       args.push(...config.flags);

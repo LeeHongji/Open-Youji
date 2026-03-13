@@ -10,20 +10,53 @@
 
 import { Cron } from 'croner';
 import { resolve } from 'node:path';
-import { existsSync, writeFileSync, unlinkSync, readFileSync, mkdirSync } from 'node:fs';
+import { existsSync, writeFileSync, unlinkSync, readFileSync, mkdirSync, appendFileSync } from 'node:fs';
 
 import { Scheduler, loadConfig } from './scheduler.js';
 import { buildSupervisorPrompt, buildFleetPrompt, spawnSession } from './session.js';
 import { parseTasks, isFleetEligible } from './tasks.js';
 import { autoCommitOrphans, rebasePush } from './git.js';
-import type { SessionConfig, FleetTask } from './types.js';
+import type { SessionConfig, SessionResult, FleetTask } from './types.js';
 
 const LOCK_FILE = '.scheduler/scheduler.lock';
 const LOG_DIR = '.scheduler/logs';
+const HISTORY_FILE = '.scheduler/history.jsonl';
 
 function log(msg: string): void {
   const ts = new Date().toISOString();
   console.log(`[${ts}] ${msg}`);
+}
+
+/** Persist session output to a log file and append to history. */
+function persistSessionLog(repoDir: string, sessionId: string, result: SessionResult): void {
+  const logsDir = resolve(repoDir, LOG_DIR);
+  if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+
+  // Write full session output to individual log file
+  const logFile = resolve(logsDir, `${sessionId}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`);
+  const content = [
+    `Session: ${sessionId}`,
+    `Label: ${result.label}`,
+    `Success: ${result.success}`,
+    `Exit code: ${result.exitCode}`,
+    `Duration: ${Math.round(result.durationMs / 1000)}s`,
+    `---`,
+    result.output ?? '(no output)',
+    result.error ? `\n--- ERROR ---\n${result.error}` : '',
+  ].join('\n');
+  writeFileSync(logFile, content);
+
+  // Append to JSONL history for trend analysis
+  const historyPath = resolve(repoDir, HISTORY_FILE);
+  const record = {
+    sessionId,
+    label: result.label,
+    success: result.success,
+    exitCode: result.exitCode,
+    durationMs: result.durationMs,
+    timestamp: new Date().toISOString(),
+  };
+  appendFileSync(historyPath, JSON.stringify(record) + '\n');
 }
 
 /** Run a single supervisor session. */
@@ -48,9 +81,10 @@ async function runSupervisor(scheduler: Scheduler): Promise<void> {
     // Spawn claude -p
     const config: SessionConfig = {
       prompt: buildSupervisorPrompt(repoDir),
-      model: 'opus',
+      model: scheduler.config.supervisorModel,
       cwd: repoDir,
-      maxDurationMs: 30 * 60 * 1000, // 30 minutes
+      maxDurationMs: scheduler.config.supervisorTimeoutMs,
+      maxBudgetUsd: scheduler.config.supervisorBudgetUsd,
       label: 'supervisor',
     };
 
@@ -58,6 +92,7 @@ async function runSupervisor(scheduler: Scheduler): Promise<void> {
     log(`Supervisor ${sessionId} finished: ${result.success ? 'OK' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s)`);
     if (result.output) log(`Output (last 2000 chars):\n${result.output}`);
     if (result.error) log(`Error: ${result.error}`);
+    persistSessionLog(repoDir, sessionId, result);
 
     // Post-session: auto-commit any remaining orphans
     autoCommitOrphans(repoDir);
@@ -88,7 +123,10 @@ async function runFleet(scheduler: Scheduler): Promise<void> {
     allTasks.push(...parseTasks(content, project));
   }
 
-  const eligible = allTasks.filter(isFleetEligible);
+  const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 };
+  const eligible = allTasks
+    .filter(isFleetEligible)
+    .sort((a, b) => (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3));
   const slotsAvailable = fleetSize - scheduler.activeSessions + 1; // +1 because supervisor slot is separate
   const toSpawn = Math.min(eligible.length, Math.max(0, slotsAvailable));
 
@@ -112,14 +150,16 @@ async function runFleetWorker(scheduler: Scheduler, task: FleetTask): Promise<vo
   try {
     const config: SessionConfig = {
       prompt: buildFleetPrompt(task),
-      model: 'sonnet',
+      model: scheduler.config.fleetModel,
       cwd: repoDir,
-      maxDurationMs: 15 * 60 * 1000, // 15 minutes
+      maxDurationMs: scheduler.config.fleetTimeoutMs,
+      maxBudgetUsd: scheduler.config.fleetBudgetUsd,
       label: `fleet:${task.project}`,
     };
 
     const result = await spawnSession(config);
     log(`Fleet ${sessionId} finished: ${result.success ? 'OK' : 'FAIL'} (${Math.round(result.durationMs / 1000)}s)`);
+    persistSessionLog(repoDir, sessionId, result);
 
     // Push
     const pushResult = rebasePush(repoDir, sessionId);
@@ -184,7 +224,7 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
-      log(`Youji scheduler starting (cron: ${config.cron}, fleet: ${config.fleetSize})`);
+      log(`Youji scheduler starting (cron: ${config.cron}, supervisor: ${config.supervisorModel}, fleet: ${config.fleetSize}×${config.fleetModel}, max-concurrent: ${config.maxConcurrent})`);
       scheduler.start();
 
       // Graceful shutdown

@@ -9,6 +9,8 @@ export interface SessionConfig {
   cwd: string;
   /** Maximum duration in milliseconds */
   maxDurationMs: number;
+  /** Maximum budget in USD (passed to --max-budget-usd) */
+  maxBudgetUsd?: number;
   /** Session label for logging */
   label: string;
   /** Additional CLI flags */
@@ -41,6 +43,18 @@ export interface SchedulerConfig {
   fleetSize: number;
   /** Port for control API */
   apiPort: number;
+  /** Supervisor model (default: opus) */
+  supervisorModel: string;
+  /** Fleet worker model (default: sonnet) */
+  fleetModel: string;
+  /** Supervisor timeout in ms (default: 60 min) */
+  supervisorTimeoutMs: number;
+  /** Fleet worker timeout in ms (default: 20 min) */
+  fleetTimeoutMs: number;
+  /** Supervisor max budget in USD (default: 5.00) */
+  supervisorBudgetUsd: number;
+  /** Fleet worker max budget in USD (default: 1.00) */
+  fleetBudgetUsd: number;
 }
 
 export interface FleetTask {
