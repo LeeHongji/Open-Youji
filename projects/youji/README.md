@@ -28,9 +28,21 @@ accepted as bootstrapping exception. Committed orphaned output-capture scheduler
 prior session. Identified convention gap: infra changes must log to projects/youji/README.md.
 Sources: git log, compliance-audit-2026-03-14.md
 
+### 2026-03-14 (session 3)
+
+Completed both high-priority tasks. (1) Documented infra-only session logging convention in
+session-discipline.md — closes the structural gap from the first self-audit. (2) Grounded
+self-improvement measurement plan with 5 concrete metrics (M1: Convention Compliance at 75%,
+M2: Gap Detection at 0.75/session, M3: Gap Closure at 50-100%, M4: Human Intervention at
+0.0/session, M5: System Learning at 1.0/session), each with explicit data sources, computation
+formulas, and baselines from the first 4 sessions. All metrics piggyback on self-audit — no
+separate collection infrastructure needed. This session itself demonstrates a mini self-improvement
+loop: self-audit detected gap → task created → convention fixed → measurement plan grounded.
+Sources: session-discipline.md, plans/self-improvement-measurement.md, TASKS.md
+
 ## Open questions
 
-- Which self-improvement metrics are robust enough to track across Youji's early operational history?
+- ~~Which self-improvement metrics are robust enough to track across Youji's early operational history?~~ → Answered: see plans/self-improvement-measurement.md (5 metrics with baselines)
 - What is the smallest useful amount of operational logging needed to support real self-study without overwhelming orient cost?
 - Which kinds of capability improvements transfer across projects, and which depend on the specific repo's history and conventions?
 - How does single-researcher operation change the dynamics of self-improvement compared to multi-user systems?
