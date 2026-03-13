@@ -53,6 +53,18 @@ generic auto-commit messages, traced to interactive sessions not committing incr
 caveat.
 Sources: findings/human-intervention-rate-2026-03-14.md, findings/self-improvement-loop-001-infra-logging.md, diagnosis/orphaned-commit-attribution-loss.md, plans/self-improvement-measurement.md
 
+### 2026-03-14 (session 5)
+
+Ran second measurement cycle (cycle 002) to produce first trend data for all 5 self-improvement
+metrics. Results: M1 compliance improved 75% to 100% (convention gaps fixed). M2 gap detection
+healthy at 1.0/session. M3 closure at 67% (1 gap still in monitoring). M4 human intervention
+stable at 0.0. M5 system learning declined from 1.0 to 0.5 — expected as obvious gaps are
+exhausted, but flagged for monitoring. Key finding from orphaned commit analysis: all 5 orphaned
+auto-commits are from interactive sessions, not autonomous ones (0% autonomous orphan rate).
+This is the first session that demonstrates "measuring improvement over time" — the mission's
+third requirement — by comparing metrics across two data points.
+Sources: findings/measurement-cycle-002-2026-03-14.md, TASKS.md, git log
+
 ## Open questions
 
 - ~~Which self-improvement metrics are robust enough to track across Youji's early operational history?~~ → Answered: see plans/self-improvement-measurement.md (5 metrics with baselines)
