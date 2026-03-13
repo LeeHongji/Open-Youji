@@ -7,9 +7,12 @@
   Done when: A repo-specific measurement plan exists with 3-5 concrete metrics and explicit data sources.
   Priority: high
 
-- [ ] Run first self-audit of convention compliance [skill: self-audit] [zero-resource]
-  Why: The meta-project becomes real when the system measures its own convention adherence from actual session artifacts.
-  Done when: A self-audit report covers log entries, findings provenance, task lifecycle tags, budget compliance, and experiment record coverage, with concrete compliance rates.
+- [x] Run first self-audit of convention compliance [skill: self-audit] [zero-resource]
+  Done: compliance-audit-2026-03-14.md — 6/8 checks passing.
+
+- [ ] Document convention for infra-only sessions: add logging requirement to session-discipline.md [zero-resource]
+  Why: Self-audit found structural gap — sessions touching only infra/ have no natural project log entry target.
+  Done when: docs/conventions/session-discipline.md explicitly states that infra changes log to projects/youji/README.md.
   Priority: high
 
 - [ ] Measure human intervention rate in Youji deployment [skill: analyze] [zero-resource]

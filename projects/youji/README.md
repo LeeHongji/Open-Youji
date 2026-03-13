@@ -20,6 +20,14 @@ The artifacts here are adapted from the OpenAkari meta-project patterns. They se
 
 Initialized the youji meta-project from OpenAkari patterns. Created project README, task list, self-improvement measurement plan, 7 design pattern documents (repo-as-cognitive-state, autonomous-execution, skills-architecture, inline-logging, layered-budget-enforcement, gravity-driven-migration, structured-work-records), and 2 example artifacts (human-intervention-rate analysis, self-observation diagnosis). Adapted all references from akari/OpenAkari to Youji's context, removed fleet-specific and multi-backend references, updated for single-researcher + `claude -p` operation.
 
+### 2026-03-14 (session 2)
+
+Ran first self-audit (compliance-audit-2026-03-14.md). 6/8 checks passing. Two violations:
+(1) infra-only commits had no project log entry — structural gap; (2) monolithic init commit
+accepted as bootstrapping exception. Committed orphaned output-capture scheduler changes from
+prior session. Identified convention gap: infra changes must log to projects/youji/README.md.
+Sources: git log, compliance-audit-2026-03-14.md
+
 ## Open questions
 
 - Which self-improvement metrics are robust enough to track across Youji's early operational history?
