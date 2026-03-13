@@ -1,0 +1,146 @@
+---
+name: design
+description: "Use when designing a new experiment or research protocol and need to ensure methodological rigor"
+argument-hint: "<research question or project path>"
+---
+
+# /design <research question or project path>
+
+You are designing a rigorous empirical study. Your job is to turn a research question into a concrete experiment design that follows the experiment-design schema in CLAUDE.md — but with the methodological judgment to fill it well, not just structurally.
+
+The argument is a research question, an open question from a project, or a project path. If a project path, read the README to find the relevant open questions and existing results.
+
+## Step 0: Knowledge framing
+
+Before any design work:
+- What knowledge does this experiment/change produce?
+- If this is an infrastructure change: it is an experiment on the system itself. The knowledge output is "does this design pattern work?" Findings are about the system's behavior, not about code correctness.
+- State the knowledge output explicitly before proceeding.
+
+## Step 1: Understand the question
+
+- Read relevant project READMEs, logs, and existing results.
+- Identify which CI layers are involved. State them explicitly.
+- Check `decisions/` for prior methodological choices that constrain the design.
+- Check existing results — are there baselines, pilot data, or error analyses that inform the design?
+
+## Step 2: Formulate the hypothesis
+
+Write a falsifiable hypothesis. A good hypothesis:
+- Makes a specific, directional prediction ("Rubric prompts will increase agreement by >5pp" not "Rubric prompts might help")
+- Is grounded in prior evidence or reasoning (cite the evidence)
+- Can be refuted by an achievable experiment
+
+If the question is exploratory (no clear prediction possible), say so explicitly and frame it as a measurement study with defined quantities of interest rather than forcing a hypothesis.
+
+## Step 3: Choose variables and metrics
+
+**Independent variables:** What are you varying? Justify why these variables and not others. Name alternatives you considered and why you rejected them.
+
+**Dependent variables / metrics:** What are you measuring? For each metric:
+- What does it capture? (agreement, accuracy, ranking consistency, etc.)
+- What are its assumptions? (e.g., Cohen's kappa assumes nominal categories; Kendall's tau assumes ordinal ranking)
+- What are its failure modes? (e.g., kappa is sensitive to prevalence; accuracy ignores ties)
+- Why this metric over alternatives?
+
+If multiple metrics are plausible, recommend a primary metric and state why, then list secondary metrics.
+
+**Controlled variables:** What must be held fixed for the comparison to be valid? Be specific — "same dataset" is insufficient; specify which subset, what preprocessing, what exclusion criteria.
+
+## Step 4: Design the method
+
+Write a step-by-step procedure. For each step:
+- Reference specific tools, scripts, or commands where they exist
+- Specify exact parameters (model names, prompt versions, number of runs, thresholds)
+- Identify where randomization or counterbalancing is needed
+
+**Upstream limitations review** (MANDATORY when consuming prior experiment outputs):
+Before designing an experiment that uses outputs from prior experiments:
+
+1. Identify all upstream experiments whose outputs will be consumed
+2. Read each upstream EXPERIMENT.md's "Limitations" section (if present)
+3. Document in the new experiment's Design section:
+   - "Upstream limitations reviewed: [list experiment IDs or 'none']"
+   - "Limitations affecting this experiment: [list or 'none']"
+   - "Mitigation: [how addressed or why acceptable]"
+
+If no upstream experiments are consumed, state: "Upstream limitations reviewed: none (no prior experiment outputs consumed)".
+
+**Model selection verification** (MANDATORY when the experiment calls an external model):
+If the experiment design involves calling any external model (LLM or VLM):
+1. Select the model intentionally (do not copy identifiers from old scripts without verifying)
+2. Document the selection rationale: which model, why, and what evidence you have
+3. Note any known failure modes or limitations and mitigation plans
+
+Address these validity threats explicitly:
+- **Position bias**: If the experiment involves pairwise comparison, how is presentation order handled?
+- **Sample size**: How many observations are needed? If you can estimate statistical power, do so. If not, state the minimum useful sample size and why.
+- **Confounds**: What other variables could explain the results? How are they controlled or measured?
+- **Construct validity**: Does the measurement actually capture the thing you claim to measure? Where is the gap between operationalization and construct?
+
+## Step 5: Estimate costs
+
+- API calls: number of calls x approximate cost per call
+- Compute time: wall-clock estimate for the full run
+- Human time: any manual steps required
+- State whether the experiment can be run in a single `claude -p` session or requires multiple
+
+## Step 6: Define success criteria
+
+**Evaluation metrics** (research — measured over N samples):
+- Behavioral outcomes observable from the data
+- Must be quantitative, comparable
+- Always include at least one knowledge output metric (findings, questions resolved, hypotheses tested)
+
+What result would confirm the hypothesis? What would refute it? What would be ambiguous? Be specific about thresholds or effect sizes.
+
+## Output format
+
+Produce the experiment using the schema from CLAUDE.md:
+
+```
+## Experiment: <title>
+
+Hypothesis: <falsifiable statement — or "Measurement study" with defined quantities>
+CI layers: <which layers are involved and how>
+
+Variables:
+- Independent: <what we vary, with justification>
+- Dependent: <what we measure, with metric properties and alternatives considered>
+- Controlled: <what we hold fixed, with specifics>
+
+Method:
+1. <step with tool/command references>
+2. ...
+
+Upstream limitations reviewed: <list or "none">
+
+Validity threats:
+- <threat>: <how addressed>
+
+Cost estimate:
+- API calls: <N calls x $X = $total>
+- Compute: <estimate>
+- Human time: <estimate>
+- Sessions: <single or multi-session>
+
+Success criteria:
+- Confirmed if: <specific threshold or pattern>
+- Refuted if: <specific threshold or pattern>
+- Ambiguous if: <what would leave the question open>
+```
+
+After the schema output, add a brief **Design rationale** section explaining the key judgment calls you made and what alternatives you rejected.
+
+## Task design for analysis
+
+When the experiment involves a long-running process (>5 minutes), the analysis task should be split:
+
+- Create a **preliminary analysis** task (satisfiable mid-experiment, e.g., "Analyze at ~50% completion")
+- Create a **final analysis** task (blocked-by experiment completion)
+
+This prevents monolithic analysis tasks from being perpetually re-selected with diminishing returns.
+
+## Commit
+
+Commit message: `design: <experiment title> — status: planned`
