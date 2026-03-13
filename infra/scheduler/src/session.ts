@@ -19,9 +19,10 @@ Execute the autonomous work cycle:
 
 1. Run /orient fast to assess repo state and select the highest-leverage task.
 2. Execute the selected task. Commit incrementally after each logical unit of work.
-3. If you completed 3 or more tasks, run /compound to embed session learnings. Otherwise skip — small sessions don't need it.
-4. Write a session log entry to the project README.
-5. Run: git push
+3. Write a session log entry to the project README.
+4. Commit and run: git push
+
+Do NOT run /compound — it is too expensive for autonomous sessions. Knowledge embedding happens during interactive sessions.
 
 Rules:
 - Check APPROVAL_QUEUE.md for pending items at the start.
@@ -30,6 +31,7 @@ Rules:
 - Commit incrementally — do not defer all commits to the end.
 - If no actionable tasks exist, log "no actionable tasks" and end cleanly.
 - Budget is limited. Be efficient — prefer /orient fast over /orient full.
+- After writing the session log, push immediately. Do not do additional work after the log entry.
 
 Working directory: ${repoDir}`;
 }
