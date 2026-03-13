@@ -40,6 +40,19 @@ separate collection infrastructure needed. This session itself demonstrates a mi
 loop: self-audit detected gap → task created → convention fixed → measurement plan grounded.
 Sources: session-discipline.md, plans/self-improvement-measurement.md, TASKS.md
 
+### 2026-03-14 (session 4)
+
+Completed all 3 remaining meta-project tasks in a single autonomous session. (1) Measured human
+intervention rate (M4): 0.33/session overall, driven by a single critical infrastructure bug (stdin
+blocking). Trend: 1.0 pre-fix to 0.0 post-fix — zero task-level interventions needed.
+(2) Documented first complete self-improvement loop: self-audit detected infra-logging convention gap
+-> task created -> convention fixed -> verified in subsequent sessions. 4-stage loop, zero human
+intervention. (3) Diagnosed orphaned commit attribution loss: 40% of git history (273 lines) carried
+generic auto-commit messages, traced to interactive sessions not committing incrementally. Proposed
+3 fixes with monitoring follow-up task. Compound step updated M4 measurement plan with git author
+caveat.
+Sources: findings/human-intervention-rate-2026-03-14.md, findings/self-improvement-loop-001-infra-logging.md, diagnosis/orphaned-commit-attribution-loss.md, plans/self-improvement-measurement.md
+
 ## Open questions
 
 - ~~Which self-improvement metrics are robust enough to track across Youji's early operational history?~~ → Answered: see plans/self-improvement-measurement.md (5 metrics with baselines)

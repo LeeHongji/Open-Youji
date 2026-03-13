@@ -81,7 +81,7 @@ closure_rate = gaps_with_completed_fix / total_gaps_detected
 
 **Data source**:
 - `APPROVAL_QUEUE.md` — entries moved to "Resolved" (each = 1 intervention event)
-- `git log --format="%an %s"` — commits by a human author (not by claude/autonomous sessions)
+- `git log --format="%an %s"` — commits by a human author (not by claude/autonomous sessions). **Caveat**: all commits share the same git author (LeeHongji) regardless of session type. Use commit message patterns and scheduler history timestamps to distinguish, not author field.
 - Direct researcher corrections identifiable from commit messages or APPROVAL_QUEUE
 
 **Computation**:
