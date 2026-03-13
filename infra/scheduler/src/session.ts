@@ -95,14 +95,16 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
       args.push(...config.flags);
     }
 
-    // Clean environment: remove CLAUDECODE to allow spawning from within a claude session,
-    // and set permission mode for autonomous operation.
+    // Clean environment: remove all Claude-related env vars to allow spawning
+    // from within a claude session.
     const env = { ...process.env };
     delete env.CLAUDECODE;
+    delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete env.CLAUDE_CODE_ENTRYPOINT;
 
     const child = spawn('claude', args, {
       cwd: config.cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],  // stdin=ignore: prevent blocking on stdin
       env,
     });
 
