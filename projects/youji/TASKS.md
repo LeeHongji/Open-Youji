@@ -14,10 +14,13 @@
 - [x] Measure human intervention rate in Youji deployment [skill: analyze] [zero-resource]
   Done: findings/human-intervention-rate-2026-03-14.md — M4 = 0.33/session overall (1.0 pre-fix → 0.0 post-fix). Single critical infrastructure intervention (stdin blocking); zero task-level interventions.
 
-- [ ] Write one self-observation diagnosis from operational evidence [requires-opus] [skill: diagnose] [zero-resource]
-  Why: The meta-project only becomes real when the system diagnoses its own failure modes from its own logs and artifacts.
-  Done when: One diagnosis file identifies a concrete self-observation failure, cites evidence, and proposes a fix or follow-up task.
-  Priority: medium
+- [x] Write one self-observation diagnosis from operational evidence [requires-opus] [skill: diagnose] [zero-resource]
+  Done: diagnosis/orphaned-commit-attribution-loss.md — 40% of commits are generic orphaned-file auto-commits (273 lines of changes with no context). Root cause: interactive sessions not committing incrementally. Proposed 3 fixes with monitoring follow-up.
+
+- [ ] Monitor orphaned commit rate over next 5 sessions [fleet-eligible] [zero-resource]
+  Why: Follow-up from diagnosis/orphaned-commit-attribution-loss.md — need to determine if 40% rate is bootstrapping noise or recurring pattern.
+  Done when: After 5 more autonomous sessions, compute orphaned commit % and decide whether to implement Fix 1 (descriptive auto-commit messages).
+  Priority: low
 
 - [x] Add one local example of a successful self-improvement loop [skill: compound] [zero-resource]
   Done: findings/self-improvement-loop-001-infra-logging.md — complete 4-stage loop (detect → task → fix → verify) for infra-only session logging convention gap. Zero human intervention, completed across 2 autonomous sessions.
