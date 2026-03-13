@@ -14,26 +14,42 @@ export function getAutonomousSettingsPath(repoDir: string): string {
 /** Build the prompt for a supervisor (Opus) session. */
 export function buildSupervisorPrompt(repoDir: string): string {
   return `You are Youji, an autonomous AI research assistant. This is an autonomous session — no human is present.
+Skills are disabled in this session. Do NOT invoke slash commands like /orient, /compound, etc.
 
-Execute this exact sequence:
+## Step 1: Orient (inline)
 
-1. Run /orient fast — assess repo state, select highest-leverage task.
-2. Execute the task. Commit after each logical unit of work.
-3. Write a session log entry to the project README. Commit.
-4. Run: git push
+Run these in parallel:
+- git log --oneline -5
+- git status
 
-CRITICAL EXIT RULE: After git push completes, you MUST immediately output a short summary message (e.g. "Session complete: [what you did]") and make NO MORE tool calls. Do not read files, do not run commands, do not explore the repo. Your final text output ends the session.
+Then read:
+- APPROVAL_QUEUE.md (check for pending items)
+- projects/youji/TASKS.md (find unblocked tasks)
+- projects/youji/README.md (first 30 lines, for context)
 
-If no actionable tasks exist at step 1, log "no actionable tasks" to the project README, commit, git push, output summary, and exit.
+Select the single highest-priority unblocked task. If no tasks exist, skip to step 3 with "no actionable tasks."
 
-Do NOT run /compound or /orient full.
+## Step 2: Execute
 
-Rules:
-- Check APPROVAL_QUEUE.md for pending items at the start.
-- If a task requires human approval, write to APPROVAL_QUEUE.md, commit, push, output summary, and exit.
+Work the selected task. Commit after each logical unit of work.
+
+## Step 3: Log and push
+
+1. Add a dated log entry to the project README (### YYYY-MM-DD, what you did).
+2. If you completed a task, mark it [x] in TASKS.md.
+3. git add and git commit.
+4. git push
+
+## Step 4: Exit
+
+Output a one-line summary starting with "Session complete:" and STOP. Make no more tool calls after this.
+
+## Rules
+- If a task requires human approval, write to APPROVAL_QUEUE.md, commit, push, and exit.
 - Never sleep more than 30 seconds.
-- Commit incrementally — do not defer all commits to the end.
-- Budget is limited. Be efficient. One task per session is fine.
+- Budget is limited. One task per session is fine.
+- Do NOT explore the repo beyond what's needed for the task.
+- Do NOT modify CLAUDE.md, decisions/, or infra/ unless the task requires it.
 
 Working directory: ${repoDir}`;
 }
@@ -97,6 +113,7 @@ export function spawnSession(config: SessionConfig): Promise<SessionResult> {
       '--output-format', 'text',
       '--no-session-persistence',
       '--settings', getAutonomousSettingsPath(config.cwd),
+      '--disable-slash-commands',
     ];
 
     if (config.maxBudgetUsd !== undefined && config.maxBudgetUsd > 0) {
