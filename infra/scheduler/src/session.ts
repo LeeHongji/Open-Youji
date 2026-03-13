@@ -79,16 +79,25 @@ export function parseSessionOutput(exitCode: number, durationMs: number): Sessio
 export function spawnSession(config: SessionConfig): Promise<SessionResult> {
   return new Promise((resolve) => {
     const startTime = Date.now();
-    const args = ['-p', config.prompt, '--model', config.model];
+    const args = [
+      '-p', config.prompt,
+      '--model', config.model,
+      '--permission-mode', 'bypassPermissions',
+    ];
 
     if (config.flags) {
       args.push(...config.flags);
     }
 
+    // Clean environment: remove CLAUDECODE to allow spawning from within a claude session,
+    // and set permission mode for autonomous operation.
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+
     const child = spawn('claude', args, {
       cwd: config.cwd,
       stdio: 'pipe',
-      env: { ...process.env },
+      env,
     });
 
     // Enforce max duration
