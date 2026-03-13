@@ -42,6 +42,12 @@ When analyzing results from a running experiment, apply checkpoint discipline:
 - If fewer than 20% new rows have accumulated since the last analysis, skip the task and select something else
 - When creating an analysis task for a running experiment, split into a preliminary analysis task (satisfiable mid-experiment) and a final analysis task (blocked-by experiment completion)
 
+## Infra-only sessions
+
+Sessions that touch only infrastructure code (e.g., `infra/scheduler/`, `.claude/skills/`, `docs/conventions/`) still require a project log entry. Log these changes to `projects/youji/README.md` — infrastructure improvements are part of the youji meta-project (self-improvement of the autonomous system).
+
+This prevents a gap where operational changes are committed but never recorded in any project log, making them invisible to future orient scans.
+
 ## Convention propagation
 
 When modifying a rule that appears in multiple documents (CLAUDE.md, SOPs, decision records, skills), propagate the change to all locations in the same turn.

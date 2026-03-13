@@ -10,10 +10,8 @@
 - [x] Run first self-audit of convention compliance [skill: self-audit] [zero-resource]
   Done: compliance-audit-2026-03-14.md — 6/8 checks passing.
 
-- [ ] Document convention for infra-only sessions: add logging requirement to session-discipline.md [zero-resource]
-  Why: Self-audit found structural gap — sessions touching only infra/ have no natural project log entry target.
-  Done when: docs/conventions/session-discipline.md explicitly states that infra changes log to projects/youji/README.md.
-  Priority: high
+- [x] Document convention for infra-only sessions: add logging requirement to session-discipline.md [zero-resource]
+  Done: session-discipline.md now contains "Infra-only sessions" section routing infra changes to projects/youji/README.md.
 
 - [ ] Measure human intervention rate in Youji deployment [skill: analyze] [zero-resource]
   Why: A decreasing intervention rate is one of the clearest signals that the system is becoming more autonomous.
