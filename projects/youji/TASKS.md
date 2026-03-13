@@ -22,9 +22,12 @@
 
 ## Ongoing measurement
 
-- [ ] Run measurement cycle 003 after 5 more autonomous sessions [fleet-eligible] [zero-resource]
-  Why: M5 (System Learning Rate) declined from 1.0 to 0.5/session. Need third data point to determine if this is a trend or stabilization. Also tracks whether M1 compliance holds at 100%.
-  Done when: findings/measurement-cycle-003-*.md exists with all 5 metrics computed and compared to cycles 001-002.
+- [x] Run measurement cycle 003 after 5 more autonomous sessions [fleet-eligible] [zero-resource]
+  Done: findings/measurement-cycle-003-2026-03-14.md — all 5 metrics computed with 3-cycle trend. M1 stable at 100%, M3 improved to 100%, M4 at 0.0. M2 declined to 0.2/s (gap exhaustion), M5 to 0.4/s (task queue empty). System stabilized; needs new task sources.
+
+- [ ] Expand self-audit scope or generate new research tasks to prevent idle sessions [fleet-eligible] [zero-resource]
+  Why: 60% of sessions 5-9 had no actionable tasks. M5 declining to 0.4/s due to empty task queue, not compound failure. System needs new self-observation areas or research directions.
+  Done when: At least 2 new actionable tasks exist in this file that address either expanded audit checks or new capability experiments.
   Priority: medium
 
 - [x] Add one local example of a successful self-improvement loop [skill: compound] [zero-resource]
