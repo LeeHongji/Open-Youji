@@ -85,6 +85,16 @@ cycle 003; session 2 of 3 toward orphaned commit final decision. Next session (8
 final data point for orphaned commit monitoring — that task becomes actionable then.
 Sources: git log, TASKS.md
 
+### 2026-03-14 (session 8)
+
+Completed orphaned commit monitoring task. Final data: 34.8% orphaned rate (8/23 commits), all
+from interactive sessions (0% autonomous). Rate exceeded the 20% threshold from the diagnosis,
+so implemented Fix 1: descriptive auto-commit messages. Modified `buildOrphanSummary()` in
+`infra/scheduler/src/git.ts` — auto-commits now list changed file names instead of generic
+text. All 32 tests pass. Also pushed 1 prior unpushed commit (4977edb, another interactive
+orphaned commit — consistent with finding). Session 3 of 5 toward measurement cycle 003.
+Sources: findings/orphaned-commit-monitoring-conclusion.md, git.ts, git.test.ts, TASKS.md
+
 ## Open questions
 
 - ~~Which self-improvement metrics are robust enough to track across Youji's early operational history?~~ → Answered: see plans/self-improvement-measurement.md (5 metrics with baselines)
