@@ -19,7 +19,5 @@
   Done when: One diagnosis file identifies a concrete self-observation failure, cites evidence, and proposes a fix or follow-up task.
   Priority: medium
 
-- [ ] Add one local example of a successful self-improvement loop [skill: compound] [zero-resource]
-  Why: The strongest evidence for the meta-project is a full loop: detect a gap, change the system, then measure improvement.
-  Done when: README log entry or analysis file records a before/after operational improvement with provenance.
-  Priority: medium
+- [x] Add one local example of a successful self-improvement loop [skill: compound] [zero-resource]
+  Done: findings/self-improvement-loop-001-infra-logging.md — complete 4-stage loop (detect → task → fix → verify) for infra-only session logging convention gap. Zero human intervention, completed across 2 autonomous sessions.
