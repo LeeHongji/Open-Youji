@@ -7,9 +7,9 @@
 
 ### Foundation
 
-- [ ] **FOUND-01**: Worktree manager can allocate an isolated git worktree for a worker session
-- [ ] **FOUND-02**: Worktree manager cleans up completed worktrees and merges branches back to main
-- [ ] **FOUND-03**: Worktree manager enforces a maximum concurrent worktree limit (configurable, default N=4)
+- [x] **FOUND-01**: Worktree manager can allocate an isolated git worktree for a worker session
+- [x] **FOUND-02**: Worktree manager cleans up completed worktrees and merges branches back to main
+- [x] **FOUND-03**: Worktree manager enforces a maximum concurrent worktree limit (configurable, default N=4)
 - [ ] **FOUND-04**: Remote repo configured as `https://github.com/LeeHongji/Open-Youji`
 
 ### Slack Bridge
@@ -84,9 +84,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | Phase 1 | Pending |
-| FOUND-02 | Phase 1 | Pending |
-| FOUND-03 | Phase 1 | Pending |
+| FOUND-01 | Phase 1 | Complete |
+| FOUND-02 | Phase 1 | Complete |
+| FOUND-03 | Phase 1 | Complete |
 | FOUND-04 | Phase 1 | Pending |
 | SLACK-01 | Phase 2 | Pending |
 | SLACK-02 | Phase 2 | Pending |
