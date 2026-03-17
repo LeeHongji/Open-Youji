@@ -4,6 +4,7 @@ __pycache__/
 .env.local
 .env.production
 .scheduler/
+.worktrees/
 infra/scheduler/dist/
 infra/scheduler/data/sessions.db
 infra/scheduler/data/fleet-monitoring.yaml
