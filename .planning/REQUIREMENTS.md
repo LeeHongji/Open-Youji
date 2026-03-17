@@ -10,7 +10,7 @@
 - [x] **FOUND-01**: Worktree manager can allocate an isolated git worktree for a worker session
 - [x] **FOUND-02**: Worktree manager cleans up completed worktrees and merges branches back to main
 - [x] **FOUND-03**: Worktree manager enforces a maximum concurrent worktree limit (configurable, default N=4)
-- [ ] **FOUND-04**: Remote repo configured as `https://github.com/LeeHongji/Open-Youji`
+- [x] **FOUND-04**: Remote repo configured as `https://github.com/LeeHongji/Open-Youji`
 
 ### Slack Bridge
 
@@ -46,8 +46,8 @@
 
 ### Observability
 
-- [ ] **OBS-01**: Every session (director and worker) produces structured metrics (JSONL)
-- [ ] **OBS-02**: Session logs are stored for debugging
+- [x] **OBS-01**: Every session (director and worker) produces structured metrics (JSONL)
+- [x] **OBS-02**: Session logs are stored for debugging
 - [ ] **OBS-03**: Worker results are summarized and reported to the director
 
 ## v2 Requirements
@@ -87,7 +87,7 @@
 | FOUND-01 | Phase 1 | Complete |
 | FOUND-02 | Phase 1 | Complete |
 | FOUND-03 | Phase 1 | Complete |
-| FOUND-04 | Phase 1 | Pending |
+| FOUND-04 | Phase 1 | Complete |
 | SLACK-01 | Phase 2 | Pending |
 | SLACK-02 | Phase 2 | Pending |
 | SLACK-03 | Phase 2 | Pending |
@@ -108,8 +108,8 @@
 | RES-01 | Phase 4 | Pending |
 | RES-02 | Phase 4 | Pending |
 | RES-03 | Phase 4 | Pending |
-| OBS-01 | Phase 1 | Pending |
-| OBS-02 | Phase 1 | Pending |
+| OBS-01 | Phase 1 | Complete |
+| OBS-02 | Phase 1 | Complete |
 | OBS-03 | Phase 3 | Pending |
 
 **Coverage:**

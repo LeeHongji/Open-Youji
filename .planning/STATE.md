@@ -9,25 +9,25 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: 1 of 4 (Foundation)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-17 -- Completed 01-01 WorktreeManager
+Phase: 1 of 4 (Foundation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-03-17 -- Completed 01-02 Metrics Extension & Repo Config
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100% (Phase 1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 6 min
-- Total execution time: 0.1 hours
+- Total plans completed: 2
+- Average duration: 4 min
+- Total execution time: 0.13 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 1/2 | 6 min | 6 min |
+| 01-foundation | 2/2 | 8 min | 4 min |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -47,6 +47,8 @@ Recent decisions affecting current work:
 - Existing push queue and task claiming API are reused, not rebuilt
 - WorktreeManager uses DI for exec/autoCommit instead of module-level mocking (testability)
 - Promise chain serialization for concurrent worktree access (zero-dependency)
+- Worktree fields optional on SessionMetrics -- only populated for worker sessions
+- worktreeMergeResult uses 4-value string union aligned with WorktreeReleaseResult
 
 ### Pending Todos
 
@@ -61,5 +63,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-17
-Stopped at: Completed 01-01-PLAN.md (WorktreeManager)
-Resume file: .planning/phases/01-foundation/01-02-PLAN.md
+Stopped at: Completed 01-02-PLAN.md (Metrics Extension & Repo Config) -- Phase 1 complete
+Resume file: Next phase
