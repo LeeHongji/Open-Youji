@@ -1,182 +1,413 @@
-# Technology Stack
+# Stack Research: Open-Youji
 
-**Project:** Youji -- Slack Bot + Claude CLI Migration
-**Researched:** 2026-03-15
-**Overall confidence:** HIGH (existing codebase provides strong constraints; all recommendations verified against official docs)
+Research date: 2026-03-17
 
-## Recommended Stack
+## 1. Slack Bot Component
 
-### Slack SDK
+### Problem
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `@slack/bolt` | ^4.6.0 | Slack bot framework (Socket Mode) | Already used in reference implementation. Socket Mode means no public HTTP endpoint needed -- critical for local Mac deployment. Bolt handles event routing, slash commands, action handlers, and Block Kit responses in a single abstraction. v4 bundles `@slack/web-api` v7 and has full TypeScript support. | HIGH |
+The existing reference implementation (`infra/scheduler/reference-implementations/slack/`) uses `@slack/bolt` with Socket Mode and an in-memory `ConversationState` keyed by `channel:threadTs`. This works for stateless Q&A but does not support persistent director sessions where Youji maintains long-running context across Slack threads.
 
-**Do NOT use:**
-- `@slack/web-api` directly -- Bolt wraps it and provides higher-level event/command routing. Using web-api alone means reimplementing Socket Mode, event parsing, and ack logic manually.
-- Slack's new "next-gen platform" (Deno-based) -- requires Slack-hosted functions. Youji runs locally, needs full CLI access, and cannot be sandboxed in Slack's runtime.
-- Python `slack-bolt` -- the scheduler is TypeScript. Adding a Python Slack process creates unnecessary IPC complexity.
+Key requirements:
+- Thread-to-session mapping: same Slack thread = same agent session context
+- Persistent sessions: Youji's director context survives process restarts
+- Proactive messaging: Youji initiates conversations (status reports, blockers)
+- Single mentor model: only one designated user interacts with Youji
 
-### Claude CLI Execution
+### Recommendation
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `claude` CLI (via `node:child_process.spawn`) | Latest installed | Spawn agent sessions | Direct subprocess spawning with `claude -p "prompt" --output-format stream-json` gives NDJSON streaming events (tool calls, assistant messages, results). The existing `backend.ts` already implements this pattern for Cursor and opencode -- Claude CLI follows the same spawn-parse-resolve pattern. No SDK dependency needed; the CLI is the execution engine. | HIGH |
-| `@anthropic-ai/claude-agent-sdk` | ^0.2.42 (existing) | **REMOVE** -- replaced by raw CLI spawning | The Agent SDK wraps `claude` CLI subprocess spawning with `query()`. But it adds ~12s overhead per call, debug spam on stderr, and an npm dependency that breaks when the CLI binary path changes. Raw `spawn("claude", ["-p", ...])` is simpler, matches the Cursor/opencode pattern in `backend.ts`, and gives full control over stream parsing. The reference implementation already demonstrates this approach works. | HIGH |
+**Use `@slack/bolt` v4.x with Socket Mode (keep existing choice)**
 
-**CLI invocation pattern:**
+Confidence: **HIGH** (95%)
+
+Rationale:
+- Socket Mode avoids needing a public HTTP endpoint — ideal for running on the mentor's macOS machine
+- `@slack/bolt` is Slack's official framework, well-maintained, and already proven in the reference implementation
+- The existing reference implementation (`slack.ts`, `living-message.ts`, `chat/`) provides 80% of the needed patterns
+
+Specific version: `@slack/bolt@^4.1.0` (current latest stable, Socket Mode support mature)
+
+**Thread-to-session mapping architecture:**
+
 ```
-claude -p "<prompt>" \
-  --output-format stream-json \
-  --verbose \
-  --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
-  --max-turns <N>
-```
-
-Each line of stdout is a JSON event: `{type: "assistant", ...}`, `{type: "tool_use", ...}`, `{type: "result", ...}`. Parse with `readline` on `proc.stdout` -- identical to the existing `parseOpenCodeMessage` / `parseCursorMessage` pattern.
-
-**Do NOT use:**
-- `@anthropic-ai/claude-code` npm package -- this IS the Claude Code CLI packaged as npm. It has a known broken entry point issue and is not designed to be imported as a library. Install `claude` CLI globally via `npm install -g @anthropic-ai/claude-code` and spawn it.
-- Direct Anthropic API (`@anthropic-ai/sdk`) -- PROJECT.md explicitly excludes direct API calls. Claude CLI provides tool use, MCP, skills, CLAUDE.md loading, and file system access that raw API does not.
-
-### Process Management
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| PM2 | ^5.x (latest) | Daemon lifecycle for scheduler | Already referenced in the codebase (`infra/scheduler/`). Handles auto-restart on crash, log rotation, startup scripts. On macOS, `pm2 startup` generates a launchd plist. Simple and battle-tested for single-process Node.js daemons. | HIGH |
-
-**Do NOT use:**
-- systemd -- macOS does not have systemd. launchd is the native alternative, but PM2 abstracts it and provides better DX (logs, restart, status).
-- Docker -- adds unnecessary complexity for a single-process local daemon. No isolation benefit since Youji needs host filesystem and CLI access.
-- `forever` / `nodemon` -- obsolete for production use. PM2 has clustering, log management, and monitoring that these lack.
-
-### Message Formatting
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Slack Block Kit (via Bolt's `say()` / `client.chat.postMessage()`) | N/A (Slack API) | Rich message formatting | Block Kit is Slack's standard for structured messages. Supports sections, dividers, code blocks, context lines, buttons, and threaded replies. The reference implementation already uses Block Kit extensively (`buildSessionBlocks`, `buildApprovalBlocks`). No additional library needed -- Bolt's `say()` accepts Block Kit JSON directly. | HIGH |
-| `chartjs-node-canvas` | ^5.0.0 (existing) | Server-side chart rendering for reports | Already in `package.json`. Generates PNG charts that are uploaded to Slack threads via `files.uploadV2`. Keep as-is. | HIGH |
-
-**Do NOT use:**
-- Slack's `mrkdwn` alone -- too limited for structured reports (no tables, no side-by-side layout). Block Kit sections with `mrkdwn` text fields are the correct granularity.
-- External templating libraries (Handlebars, EJS) for Slack messages -- Block Kit is JSON, not HTML. Build helper functions that return Block Kit JSON arrays (the reference implementation demonstrates this pattern well).
-
-### Supporting Libraries (New)
-
-| Library | Version | Purpose | When to Use | Confidence |
-|---------|---------|---------|-------------|------------|
-| `croner` | ^9.0.0 (existing) | Cron scheduling | Already handles scheduled session triggers. Extend for Slack-triggered on-demand sessions by combining cron jobs with Slack event handlers. | HIGH |
-| `better-sqlite3` | ^12.6.2 (existing) | Session/cost tracking | Keep for cost tracking. May extend schema to track Slack-initiated sessions vs. scheduled sessions. | HIGH |
-| `node:child_process` | Built-in | CLI spawning | Core of the new Claude backend. `spawn()` with `stdio: ["pipe", "pipe", "pipe"]` for stdin prompt delivery and stdout NDJSON parsing. | HIGH |
-
-### Libraries to Remove
-
-| Library | Reason |
-|---------|--------|
-| `@anthropic-ai/claude-agent-sdk` | Replaced by direct `claude` CLI spawning. Removes the 12s overhead, stderr debug spam, and npm dependency. The `sdk.ts` file and `ClaudeBackend` class in `backend.ts` should be rewritten to use raw `spawn("claude", [...])`. |
-
-## Architecture Decisions
-
-### Socket Mode over HTTP Mode
-
-Socket Mode establishes a WebSocket connection from the bot to Slack's servers. This means:
-- No public URL or ngrok needed (critical for local Mac deployment)
-- No TLS certificate management
-- Firewall-friendly (outbound-only connections)
-- Already configured in the reference implementation's app manifest
-
-**Tradeoff:** Socket Mode requires an App-Level Token (`xapp-...`) in addition to the Bot Token (`xoxb-...`). Both are already documented in the reference implementation's env vars.
-
-### Claude CLI Output Parsing Strategy
-
-The `stream-json` output format provides real-time events. The recommended parsing approach:
-
-1. Spawn `claude -p "<prompt>" --output-format stream-json --verbose`
-2. Read stdout line-by-line via `node:readline`
-3. Parse each line as JSON
-4. Map to the existing `SDKMessage`-compatible interface (same pattern as `parseCursorMessage` and `parseOpenCodeMessage`)
-5. On process exit, resolve the `QueryResult` promise
-
-This is a direct port of the existing `OpenCodeBackend.spawnAgent()` method. The only change is the binary name and CLI flags.
-
-### Slack Message Pattern: Summary + Thread
-
-Per PROJECT.md requirements:
-- **Channel message:** Clean summary (Block Kit sections with status, cost, key findings)
-- **Thread replies:** Detailed logs, tool call traces, full output
-- **Living messages:** Update the channel message in-place during execution (already implemented in reference)
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Slack SDK | `@slack/bolt` (JS) | `slack-bolt` (Python) | Scheduler is TypeScript; adding Python Slack process creates IPC overhead and split-brain state |
-| Slack SDK | `@slack/bolt` (JS) | Slack next-gen platform (Deno) | Requires Slack-hosted functions; Youji needs local CLI access |
-| Slack transport | Socket Mode | HTTP Mode (Events API) | Requires public URL or ngrok; local Mac has no stable public endpoint |
-| Claude execution | Raw CLI spawn | `@anthropic-ai/claude-agent-sdk` | 12s overhead per call, debug spam, extra dependency; raw spawn matches existing Cursor/opencode pattern |
-| Claude execution | Raw CLI spawn | Direct Anthropic API | Loses Claude Code's tool use, MCP, skills, CLAUDE.md, file system access |
-| Process manager | PM2 | Docker | Unnecessary isolation overhead; Youji needs host FS and CLI access |
-| Process manager | PM2 | launchd (raw) | PM2 abstracts launchd with better DX (logs, status, restart commands) |
-| Message format | Block Kit JSON | Custom HTML/templates | Block Kit is Slack's native format; no rendering engine needed |
-
-## Installation
-
-```bash
-# In infra/scheduler/
-# Add Slack dependency (was reference-only, now production)
-npm install @slack/bolt@^4.6.0
-
-# Remove deprecated SDK (after migration)
-npm uninstall @anthropic-ai/claude-agent-sdk
-
-# Existing dependencies stay as-is
-# better-sqlite3, croner, chart.js, chartjs-node-canvas -- all kept
-
-# Dev dependencies stay as-is
-# typescript, vitest, @types/better-sqlite3, @types/node
+Slack Thread (channel:threadTs)  →  SessionContext (in-memory + SQLite)
+                                      ├── conversationHistory: Message[]
+                                      ├── activeAgentSessionId: string | null
+                                      ├── directorState: DirectorContext
+                                      └── lastActivityMs: number
 ```
 
-```bash
-# Claude CLI (global, already installed on host)
-# Verify: claude --version
-# If missing: npm install -g @anthropic-ai/claude-code
+Use the existing `better-sqlite3` (already a dependency) to persist session context:
+
+```sql
+CREATE TABLE director_sessions (
+  thread_key TEXT PRIMARY KEY,        -- "channel:threadTs"
+  conversation_json TEXT NOT NULL,    -- serialized conversation history
+  director_state_json TEXT,           -- director-specific context (project status, pending decisions)
+  active_agent_session TEXT,          -- Claude SDK session ID (for resume)
+  created_at INTEGER NOT NULL,
+  last_activity_at INTEGER NOT NULL
+);
 ```
 
-```bash
-# PM2 (global, for daemon management)
-npm install -g pm2
-pm2 startup  # generates launchd plist for macOS auto-start
-```
+Confidence for SQLite persistence: **HIGH** (90%) — `better-sqlite3` is already in `package.json`, synchronous reads are fast, and the data volume is trivial (dozens of threads, not millions).
 
-## Environment Variables (New/Modified)
+**Session resume via Claude SDK:**
 
-```bash
-# Required for Slack (move from reference to production)
-SLACK_BOT_TOKEN=xoxb-...        # Bot OAuth token
-SLACK_APP_TOKEN=xapp-...        # App-level token for Socket Mode
-SLACK_USER_ID=U...              # Mentor's Slack user ID (for DM routing)
+The SDK's `resume` option (visible in `sdk.ts` line 19: `resume?: string`) allows resuming a session by ID. This is the mechanism for persistent director sessions:
 
-# Optional Slack config (carried from reference)
-SLACK_DEV_CHANNELS=C...         # Development channel IDs (comma-separated)
-SLACK_CHAT_CHANNELS=C...        # Chat-mode channel IDs
-SLACK_CHAT_MODEL=sonnet         # Model for chat sessions
-SLACK_LIVING_MESSAGE=1          # Enable living messages (default: enabled)
+1. User sends message in a Slack thread
+2. Look up `director_sessions` by `channel:threadTs`
+3. If an existing session exists and hasn't expired, call `query()` with `resume: sessionId`
+4. If no session exists, create a new one
 
-# Modified backend config
-AGENT_BACKEND=claude            # Lock to Claude-only (remove auto/cursor/opencode fallback)
-```
+Confidence: **MEDIUM** (70%) — The `resume` option exists in the SDK interface but its behavior for long-lived sessions (hours/days between messages) needs validation. If resume fails on stale sessions, the fallback is to start a new session with conversation history injected into the prompt.
 
-## Sources
+**Proactive messaging pattern:**
 
-- [@slack/bolt npm page](https://www.npmjs.com/package/@slack/bolt) -- v4.6.0 confirmed (HIGH)
-- [Slack Bolt.js official docs](https://docs.slack.dev/tools/bolt-js/) -- Socket Mode, events, commands (HIGH)
-- [Claude Code headless mode docs](https://code.claude.com/docs/en/headless) -- `--output-format stream-json`, `-p` flag (HIGH)
-- [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference) -- CLI flags and options (HIGH)
-- [Slack Block Kit docs](https://docs.slack.dev/block-kit/) -- Message formatting reference (HIGH)
-- [Claude Agent SDK TypeScript repo](https://github.com/anthropics/claude-agent-sdk-typescript) -- 12s overhead issue, subprocess spawning internals (MEDIUM)
-- [Slack app manifest reference](https://docs.slack.dev/tools/bolt-js/getting-started/) -- Socket Mode setup (HIGH)
-- Existing codebase: `infra/scheduler/reference-implementations/slack/` -- production-tested Slack patterns (HIGH)
-- Existing codebase: `infra/scheduler/src/backend.ts` -- CLI spawn pattern to replicate (HIGH)
+Use the existing `croner` cron library (already a dependency) to schedule periodic director wake-ups. The director wake-up flow:
+
+1. Cron triggers every N minutes
+2. Director agent runs with a "status check" prompt
+3. Agent reads project files, TASKS.md, APPROVAL_QUEUE.md
+4. If there's something to report, the agent's response is posted to the designated DM channel
+5. If nothing noteworthy, the session ends silently
+
+This mirrors the existing `executeJob()` pattern in `executor.ts` but posts results to Slack instead of just logging.
+
+### What NOT to use
+
+- **Slack Events API over HTTP**: Requires a public endpoint, TLS, and ngrok or similar — unnecessary complexity for a single-user macOS setup. Socket Mode is simpler.
+- **@slack/web-api standalone**: Lower-level than Bolt; would require reimplementing message routing, middleware, and error handling.
+- **Custom WebSocket to Slack**: Bolt's Socket Mode already handles reconnection, heartbeats, and acknowledgments.
 
 ---
-*Stack research: 2026-03-15*
+
+## 2. Git Worktree Management for Parallel Workers
+
+### Problem
+
+Worker agents need isolated working directories to avoid merge conflicts. The existing system uses a single repository with a push queue (`push-queue.ts`) to serialize pushes. For true parallel execution, each worker needs its own worktree.
+
+### Recommendation
+
+**Use `git worktree` (built-in git feature) managed via Node.js `child_process`**
+
+Confidence: **HIGH** (92%)
+
+Git worktrees are the correct primitive — they share the same `.git` directory but provide separate working trees and branch checkouts. No third-party library is needed; the git CLI commands are straightforward.
+
+**Worktree lifecycle:**
+
+```
+git worktree add /path/to/worktrees/worker-{sessionId} -b worker/{sessionId} main
+# ... worker agent runs in that directory ...
+git worktree remove /path/to/worktrees/worker-{sessionId}
+```
+
+**Directory layout:**
+
+```
+~/Youji/                           # main worktree (director + scheduler)
+~/Youji/.worktrees/                # parent dir for worker worktrees
+~/Youji/.worktrees/worker-abc123/  # worker session worktree
+~/Youji/.worktrees/worker-def456/  # another worker session worktree
+```
+
+Use `.worktrees/` inside the repo root (gitignored). Alternative: use a temp directory outside the repo, but keeping it co-located simplifies cleanup and debugging.
+
+**Implementation module: `worktree-manager.ts`**
+
+```typescript
+interface WorktreeHandle {
+  path: string;          // absolute path to worktree
+  branch: string;        // branch name (worker/{sessionId})
+  sessionId: string;
+  createdAt: number;
+}
+
+// Core operations:
+async function createWorktree(repoDir: string, sessionId: string): Promise<WorktreeHandle>
+async function removeWorktree(handle: WorktreeHandle): Promise<void>
+async function listWorktrees(repoDir: string): Promise<WorktreeHandle[]>
+async function cleanupStaleWorktrees(repoDir: string, maxAgeMs: number): Promise<number>
+```
+
+**Merge strategy:**
+
+After a worker completes:
+1. Worker commits to its branch (`worker/{sessionId}`)
+2. Merge branch into `main` (or rebase if clean)
+3. Push `main` to origin via the existing push queue
+4. Remove the worktree and delete the branch
+
+The existing `rebase-push.ts` and `push-queue.ts` can be reused for step 3.
+
+Confidence for rebase-push reuse: **HIGH** (88%) — The push queue already handles serialized pushes with priority ordering (opus > fleet). Workers would use `priority: "fleet"`.
+
+**Concurrency limits:**
+
+- Max worktrees: configurable, default 3 (macOS machines have limited CPU/RAM)
+- Each worktree consumes ~100MB disk (shared `.git`, but working tree files are copied)
+- Monitor with `git worktree list --porcelain` for cleanup
+
+**Edge cases to handle:**
+- Stale worktrees from crashed sessions → periodic cleanup via `cleanupStaleWorktrees()`
+- Branch conflicts when two workers modify the same file → the push queue's rebase logic handles this; if rebase fails, fall back to branch push (existing behavior)
+- `.git/worktrees/` lock files → `git worktree remove --force` as last resort
+
+### What NOT to use
+
+- **Separate git clones**: Wastes disk space (full `.git` per clone), slower to create, and doesn't share reflog/objects.
+- **`simple-git` npm package**: Adds a dependency for something achievable with 4-5 `child_process.execFile()` calls. The existing codebase already uses raw `execFile("git", ...)` throughout (`verify.ts`, `auto-commit.ts`, `rebase-push.ts`).
+- **`isomorphic-git`**: Pure JS git implementation — slower, incomplete (no worktree support), and unnecessary when the system already depends on the git CLI.
+
+---
+
+## 3. Time-Based Resource Accounting
+
+### Problem
+
+The existing system tracks costs in USD (`costUsd` in `QueryResult`, `budget.yaml` with `consumed`/`limit` in dollars). Since Open-Youji uses Claude SDK (local CLI, no API billing), token costs are zero. The real constraint is wall-clock time — how long sessions run, how much compute the mentor's machine is spending.
+
+### Recommendation
+
+**Track wall-clock minutes as the primary resource unit, stored in the existing budget YAML format**
+
+Confidence: **HIGH** (85%)
+
+The existing `budget.yaml` schema and `budget-gate.ts` enforcement layer can be adapted with minimal changes:
+
+```yaml
+# projects/sample-project/budget.yaml
+deadline: 2026-04-15
+resources:
+  - resource: compute-minutes
+    consumed: 347
+    limit: 2000
+  - resource: sessions
+    consumed: 42
+    limit: 200
+```
+
+**What to track:**
+1. **Session wall-clock time** (primary): `durationMs` from `AgentResult` — already tracked
+2. **Session count** (secondary): `runCount` in `JobState` — already tracked
+3. **Turn count** (diagnostic): `numTurns` — already tracked
+
+**Implementation approach:**
+
+The existing `ExecutionResult` already has `durationMs`. The accounting flow:
+
+1. Session completes → `executor.ts` receives `ExecutionResult` with `durationMs`
+2. Convert to minutes: `Math.ceil(durationMs / 60_000)`
+3. Update `budget.yaml` for the relevant project: increment `consumed` for `compute-minutes`
+4. `budget-gate.ts` checks budget before launching new sessions (already exists)
+
+**No new library needed.** The existing YAML read/write in `notify.ts` (`readBudgetStatus()`) and the budget gate in `budget-gate.ts` already provide the enforcement mechanism. The only change is the resource unit (minutes instead of USD).
+
+**Time tracking module additions:**
+
+```typescript
+// In executor.ts or a new time-accounting.ts
+async function recordSessionTime(
+  repoDir: string,
+  project: string,
+  durationMs: number,
+): Promise<void> {
+  const minutes = Math.ceil(durationMs / 60_000);
+  // Read budget.yaml, increment compute-minutes consumed, write back
+}
+```
+
+**Rate limiting (optional, for future):**
+
+If the mentor wants to limit concurrent compute:
+- Max total wall-clock minutes per day
+- Max concurrent sessions (already exists: `maxConcurrentSessions` in `ServiceOptions`)
+- Cool-down period between sessions
+
+For time-series tracking (if needed for dashboards later), use the existing `better-sqlite3`:
+
+```sql
+CREATE TABLE session_time_log (
+  session_id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  turns INTEGER,
+  backend TEXT
+);
+```
+
+Confidence for SQLite time log: **MEDIUM** (75%) — useful for analytics but not required for MVP. The budget YAML approach is sufficient for enforcement.
+
+### What NOT to use
+
+- **Prometheus/Grafana**: Overkill for a single-machine setup. The scheduler already has `metrics.ts` for in-process metrics.
+- **Time-tracking SaaS (Toggl, Clockify)**: Unnecessary external dependency for machine-to-machine time tracking.
+- **Token counting libraries (`tiktoken`, `@anthropic-ai/tokenizer`)**: Irrelevant — we're not counting tokens, we're counting wall-clock time.
+
+---
+
+## 4. Director-Worker Hierarchy with Claude Agent SDK
+
+### Problem
+
+The existing system treats all sessions as equal peers. The new architecture needs a hierarchy:
+- **Director (Youji)**: long-running, Slack-facing, spawns and monitors workers
+- **Workers**: short-lived, headless, execute single tasks in isolated worktrees
+
+### Recommendation
+
+**Use the SDK's Agent Teams feature for director-spawned workers**
+
+Confidence: **MEDIUM-HIGH** (78%)
+
+The codebase already has Agent Teams support (`team-session.ts`), and the SDK's `agents` option enables the supervisor (director) to spawn subagents via the `Task` tool. This is the most natural fit for the director-worker hierarchy.
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────┐
+│  Scheduler (service.ts)                      │
+│  - Cron triggers director wake-up            │
+│  - Manages worktree lifecycle                │
+│  - Enforces time budgets                     │
+├─────────────────────────────────────────────┤
+│  Director Agent (Youji)                      │
+│  - Runs as persistent SDK session            │
+│  - Profile: opus, maxTurns: 256              │
+│  - Has Task tool for spawning workers        │
+│  - Reports to mentor via Slack               │
+├─────────────────────────────────────────────┤
+│  Worker Agent A          Worker Agent B       │
+│  - Spawned via Task tool  - Spawned via Task  │
+│  - Runs in worktree A    - Runs in worktree B │
+│  - Profile: sonnet/opus  - Profile: sonnet    │
+│  - maxTurns: 64          - maxTurns: 64       │
+│  - Headless (no Slack)   - Headless (no Slack)│
+└─────────────────────────────────────────────┘
+```
+
+**Two implementation paths (choose based on SDK capabilities):**
+
+**Path A: SDK Agent Teams (preferred)**
+
+Use the existing `buildTeamSession()` from `team-session.ts` to define worker agents:
+
+```typescript
+const workerConfigs: SkillAgentConfig[] = [
+  {
+    name: "worker",
+    description: "Executes a single task in an isolated git worktree. " +
+      "Commits results to a worker branch. Headless — no Slack access.",
+    prompt: buildWorkerPrompt(task), // task-specific prompt
+    model: "sonnet",
+    maxTurns: 64,
+  },
+];
+```
+
+The director spawns workers via the `Task` tool in its conversation:
+```
+Task: "worker" with description "Implement feature X in projects/foo"
+```
+
+Limitation: SDK subagents run in the same `cwd` as the parent. For worktree isolation, the director would need to set up the worktree first (via Bash tool) and then the worker operates within it.
+
+Confidence: **MEDIUM** (70%) — Agent Teams work well for analyst+builder patterns (already proven in the codebase), but the worktree isolation requirement adds complexity. The subagent's `cwd` is inherited from the parent, so worktree switching must happen via Bash commands within the subagent, not at the SDK level.
+
+**Path B: Scheduler-managed workers (fallback)**
+
+If Agent Teams doesn't provide sufficient control over worker `cwd`, use the scheduler to spawn workers directly:
+
+```typescript
+// Director decides what tasks to assign (via Slack conversation)
+// Scheduler spawns workers independently (not as SDK subagents)
+const workerResult = await spawnAgent({
+  profile: AGENT_PROFILES.fleetWorker,
+  prompt: buildWorkerPrompt(task),
+  cwd: worktreeHandle.path,  // isolated worktree
+  sessionId: `worker-${task.id}`,
+  backend: "claude",
+});
+```
+
+This mirrors the existing fleet execution pattern (`fleet-executor.ts`) but:
+- Workers run in worktrees instead of the main repo
+- The director agent decides task assignment (not the scheduler's task scanner)
+- Results are reported back to the director via the session registry
+
+Confidence: **HIGH** (88%) — This is essentially the existing fleet pattern with worktree isolation. The `spawnAgent()` function already accepts `cwd` as a parameter.
+
+**Recommended approach: Path B for MVP, migrate to Path A when SDK worktree support is validated.**
+
+Path B is lower risk because:
+1. `spawnAgent()` with custom `cwd` is battle-tested
+2. Worktree lifecycle is managed by the scheduler (not the agent)
+3. The director can monitor workers via the existing session registry (`session.ts`)
+4. No dependency on SDK Agent Teams working correctly with different `cwd` per subagent
+
+**Director agent profile:**
+
+```typescript
+const directorProfile: AgentProfile = {
+  model: "opus",
+  maxTurns: undefined,      // no turn limit — director runs until idle
+  maxDurationMs: 3_600_000, // 1 hour max per wake-up
+  label: "director",
+};
+```
+
+**Director system prompt structure:**
+
+The director needs a specialized system prompt that:
+1. Defines its role (institute director, not a task executor)
+2. Provides current system state (active sessions, project status, budgets)
+3. Lists available actions (spawn worker, report to mentor, review approvals)
+4. Establishes communication protocols (when to proactively message the mentor)
+
+This is analogous to the existing `buildChatPrompt()` in `chat-prompt.ts` but with director-specific context.
+
+**Worker result flow:**
+
+```
+Worker completes → AgentResult
+  → Merge worker branch into main (worktree-manager)
+  → Push via push queue (rebase-push.ts)
+  → Update session metrics (metrics.ts)
+  → Record time consumed (time-accounting)
+  → Remove worktree (worktree-manager)
+  → Notify director (session registry or Slack thread)
+```
+
+---
+
+## Summary: Full Stack
+
+| Component | Library/Tool | Version | Confidence |
+|-----------|-------------|---------|------------|
+| Slack bot framework | `@slack/bolt` | `^4.1.0` | HIGH (95%) |
+| Slack connection mode | Socket Mode (built into Bolt) | -- | HIGH (95%) |
+| Session persistence | `better-sqlite3` (existing dep) | `^12.6.2` | HIGH (90%) |
+| Session resume | Claude SDK `resume` option | `^0.2.42` | MEDIUM (70%) |
+| Cron scheduling | `croner` (existing dep) | `^9.0.0` | HIGH (95%) |
+| Git worktree management | `git worktree` CLI via `child_process` | git 2.x | HIGH (92%) |
+| Time-based budgets | Existing `budget.yaml` + `budget-gate.ts` | -- | HIGH (85%) |
+| Time-series logging | `better-sqlite3` | `^12.6.2` | MEDIUM (75%) |
+| Director-worker spawning | `spawnAgent()` with worktree `cwd` | -- | HIGH (88%) |
+| Agent Teams (future) | `@anthropic-ai/claude-agent-sdk` agents | `^0.2.42` | MEDIUM (70%) |
+| Push serialization | Existing `push-queue.ts` | -- | HIGH (88%) |
+| Test framework | `vitest` (existing dep) | `^4.0.18` | HIGH (95%) |
+| TypeScript | `typescript` (existing dep) | `^5.9.3` | HIGH (95%) |
+
+### New dependencies needed: 1
+
+Only `@slack/bolt@^4.1.0` needs to be added. Everything else is either already in `package.json` or uses built-in Node.js/git capabilities.
+
+### Key architectural decisions still pending validation
+
+1. **SDK `resume` for long-lived director sessions** — needs testing to confirm behavior when hours/days pass between messages. Fallback: inject conversation history into prompt.
+2. **Agent Teams `cwd` isolation** — needs testing to confirm whether subagents can operate in different directories than the parent. Determines Path A vs Path B for worker spawning.
+3. **Worktree branch merge strategy** — rebase vs merge commit. Recommendation: rebase (matches existing `rebase-push.ts` pattern), but may need merge commits if worker changes are large and rebase conflicts are frequent.

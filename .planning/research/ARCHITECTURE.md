@@ -1,396 +1,401 @@
-# Architecture Patterns
+# Open-Youji Architecture
 
-**Domain:** Autonomous AI research agent with Slack interface, Claude CLI backend
-**Researched:** 2026-03-15
-**Overall confidence:** HIGH (based on existing codebase analysis + Claude CLI docs)
+Research document covering the target architecture for the Open-Youji autonomous research system.
 
-## Recommended Architecture
+## 1. Component Boundaries
 
-The migration simplifies the existing multi-backend scheduler into a single-backend system with Slack as the primary human interface. The core insight: the existing architecture is already well-structured. The migration is subtractive (remove backends) plus additive (promote Slack from reference to production).
+### 1.1 Youji Director (persistent, Slack-resident)
 
-```
-                    ┌─────────────────────────────┐
-                    │        Slack Bot             │
-                    │   (Socket Mode, Bolt SDK)    │
-                    │                              │
-                    │  • Receives mentor messages   │
-                    │  • Slash commands / DMs       │
-                    │  • Posts summaries + threads  │
-                    └──────────┬──────────┬────────┘
-                               │          │
-                    inbound    │          │  outbound
-                    messages   │          │  notifications
-                               │          │
-                    ┌──────────▼──────────▼────────┐
-                    │      Scheduler Daemon         │
-                    │   infra/scheduler/ (TS)       │
-                    │                               │
-                    │  ┌──────────┐  ┌───────────┐  │
-                    │  │ Cron     │  │ Slack     │  │
-                    │  │ Poller   │  │ Listener  │  │
-                    │  └────┬─────┘  └─────┬─────┘  │
-                    │       │              │        │
-                    │  ┌────▼──────────────▼─────┐  │
-                    │  │     Task Router          │  │
-                    │  │  (scheduled + on-demand) │  │
-                    │  └────────────┬─────────────┘  │
-                    │               │               │
-                    │  ┌────────────▼─────────────┐  │
-                    │  │     Budget Gate           │  │
-                    │  └────────────┬─────────────┘  │
-                    │               │               │
-                    │  ┌────────────▼─────────────┐  │
-                    │  │  Claude CLI Backend       │  │
-                    │  │  (sole execution engine)  │  │
-                    │  └────────────┬─────────────┘  │
-                    │               │               │
-                    │  ┌────────────▼─────────────┐  │
-                    │  │   Push Queue + Verify     │  │
-                    │  └──────────────────────────┘  │
-                    └───────────────┬────────────────┘
-                                    │
-                         spawns `claude` CLI
-                                    │
-                    ┌───────────────▼────────────────┐
-                    │     Agent Session               │
-                    │  (stateless, ephemeral)          │
-                    │                                  │
-                    │  Claude CLI process              │
-                    │  --print / --output-format json  │
-                    │  Full MCP, skills, CLAUDE.md     │
-                    │  access via native Claude Code   │
-                    └──────────────────────────────────┘
-```
+The director is the system's single persistent agent identity. It communicates with a human mentor via Slack and orchestrates all worker activity.
 
-### Component Boundaries
+**Responsibilities:**
+- Receives human instructions via Slack messages
+- Maintains conversational context per Slack thread
+- Decides what work to do: task selection, prioritization, decomposition
+- Spawns worker agents for task execution
+- Reports results back to the human in Slack
+- Makes strategic decisions (what to research, which experiments to run)
 
-| Component | Responsibility | Communicates With | Interface |
-|-----------|---------------|-------------------|-----------|
-| **Slack Bot** | Receives mentor messages, posts results, manages threads, handles slash commands, approval UX | Scheduler (in-process), Mentor (Slack API) | Slack Socket Mode (inbound), Slack Web API (outbound) |
-| **Scheduler Daemon** | Cron-based job scheduling, session lifecycle management, metrics recording | Slack Bot (in-process), Claude CLI Backend (spawns process), Push Queue, Budget Gate | pm2-managed Node.js process |
-| **Task Router** | Merges scheduled jobs + on-demand Slack requests into a unified execution queue | Scheduler internal module | Function calls |
-| **Claude CLI Backend** | Spawns `claude` CLI process, captures output (JSON stream), enforces timeouts | Scheduler (parent process) | child_process spawn, stdout JSON stream |
-| **Budget Gate** | Pre-execution budget check | Scheduler, budget.yaml/ledger.yaml files | Function call |
-| **Push Queue** | Serialized git push with rebase-retry | Scheduler, Git | Function call + child_process |
-| **Slack Notifier** | Posts session start/complete/error to Slack channels and threads | Slack Web API | Slack Block Kit messages |
-| **Experiment Runner** | Fire-and-forget long-running tasks | Scheduler API (registration), progress.json | Detached Python process |
-| **Budget Verify** | Offline budget reconciliation | Ledger files, CF Gateway logs | CLI tool (Python) |
+**Implementation:** A long-lived process that connects to Slack via Socket Mode (WebSocket). Uses the Claude Agent SDK to run a persistent Claude Code session that acts as the director's "brain." The director is NOT a continuously-running LLM session — it is an event-driven process that invokes Claude when a Slack event arrives (message, reaction, etc.) and maintains state in the git repo between invocations.
 
-### Data Flow
+**Key design question — stateful vs. stateless director:**
+- **Stateless (recommended for v1):** Each Slack message triggers a fresh Claude invocation with context loaded from the repo + Slack thread history. This is simpler, avoids session timeout issues, and aligns with the existing chat pattern in the reference Slack implementation.
+- **Stateful (future):** A persistent Claude session that stays alive across messages. Higher coherence but requires session management, reconnection logic, and cost management.
 
-#### Flow 1: Mentor Slack message to task execution
+### 1.2 Worker Pool
+
+Workers are ephemeral Claude Code sessions that execute specific tasks in isolated git worktrees.
+
+**Responsibilities:**
+- Execute a single task (implementation, analysis, experiment setup, etc.)
+- Operate in an isolated git worktree — no interference with other workers or the director
+- Commit work to their worktree branch
+- Report completion/failure back to the director
+- Self-terminate after task completion or timeout
+
+**Implementation:** Each worker is a `spawnAgent()` call (from existing `agent.ts`) with its `cwd` set to an isolated git worktree directory. Workers use the Claude Agent SDK via the existing backend abstraction.
+
+**Isolation model:** Git worktrees provide filesystem-level isolation. Each worker gets its own worktree branched from `main`. On completion, the worker's commits are merged/rebased back to `main` via the push queue.
+
+### 1.3 Scheduler
+
+The scheduler is the existing `infra/scheduler/` process, extended to support the new hierarchical model.
+
+**Current role:** Cron-triggered autonomous sessions, fleet worker management, push queue coordination.
+
+**New role in Open-Youji:** The scheduler becomes the runtime host for both the director and the worker pool. It manages:
+- Director lifecycle (start, restart, health monitoring)
+- Worker pool capacity (max concurrent workers, worktree allocation)
+- Push queue for serialized git operations
+- Control API (HTTP on port 8420)
+- Health monitoring and Slack notifications
+
+The scheduler does NOT make task selection decisions — that is the director's job. The scheduler is infrastructure; the director is intelligence.
+
+### 1.4 Slack Bridge
+
+The Slack bridge connects the director to Slack. It translates between Slack events and director actions.
+
+**Responsibilities:**
+- Maintains the Slack WebSocket connection (Socket Mode via `@slack/bolt`)
+- Routes incoming messages to the director
+- Posts director responses back to Slack threads
+- Handles Slack-specific UX (reactions, thread management, living messages)
+- Manages thread-to-conversation mapping
+
+**Implementation:** The existing reference implementation at `infra/scheduler/reference-implementations/slack/` provides the foundation. The key difference from the current design: instead of routing messages to a lightweight chat agent, the bridge routes them to the director agent which can spawn workers.
+
+## 2. Data Flow Between Components
 
 ```
-1. Mentor sends DM or channel message in Slack
-   │
-2. Slack Bot receives via Socket Mode event
-   │
-3. Message classifier determines intent:
-   │  ├── Quick question → Chat agent (Sonnet, fast, in-thread reply)
-   │  ├── Task assignment → Deep work session (Opus, spawns Claude CLI)
-   │  ├── Slash command (/status, /budget, /approve) → Direct handler
-   │  └── Approval response → Approval queue update
-   │
-4. For task execution:
-   │  a. Slack Bot posts "Starting..." with session ID to thread
-   │  b. Task Router creates ephemeral Job object
-   │  c. Budget Gate checks resource availability
-   │  d. Claude CLI Backend spawns: `claude -p --output-format stream-json --model opus ...`
-   │  e. Progress handler streams tool summaries + text to Slack thread
-   │  f. On completion: session text captured
-   │
-5. Post-session:
-   │  a. Auto-commit orphaned files (if any)
-   │  b. Push queue: rebase + push to origin
-   │  c. Verify.ts: post-session quality check
-   │  d. Metrics recorded to sessions.jsonl
-   │  e. Slack Bot posts summary to channel, details in thread
+Human (Slack)
+    |
+    | Slack Socket Mode (WebSocket)
+    v
++-------------------+
+| Slack Bridge      |  Translates Slack events <-> director invocations
++-------------------+
+    |
+    | In-process function calls
+    v
++-------------------+
+| Youji Director    |  Makes decisions, decomposes tasks, reports results
+| (Claude session)  |
++-------------------+
+    |
+    | spawnAgent() calls via scheduler infrastructure
+    v
++-------------------+
+| Worker Pool       |  N concurrent workers, each in a git worktree
+| [W1] [W2] [W3]   |
++-------------------+
+    |
+    | git commit (in worktree) + push queue
+    v
++-------------------+
+| Git Repository    |  Persistent memory, source of truth
+| (main branch)     |
++-------------------+
+    |
+    | Scheduler reads repo state for /orient, status, etc.
+    v
++-------------------+
+| Scheduler         |  Infrastructure host, capacity management, cron jobs
+| (port 8420 API)   |
++-------------------+
 ```
 
-#### Flow 2: Scheduled autonomous session
+### 2.1 Message flow: Human -> Work gets done
+
+1. Human sends a Slack message in a thread
+2. Slack Bridge receives the event, fetches thread history for context
+3. Bridge invokes the Director with the message + thread context + repo state
+4. Director reads repo state (TASKS.md, project READMEs, recent logs) to orient
+5. Director decides to spawn a worker for a specific task
+6. Director calls a "spawn worker" tool/function, specifying: task description, project scope, worktree branch name
+7. Scheduler allocates a worktree, spawns the worker agent
+8. Worker executes the task, commits to its worktree branch
+9. Worker completes; scheduler merges the branch back to main via push queue
+10. Director is notified of completion, summarizes results to human in Slack
+
+### 2.2 Message flow: Autonomous work (no human trigger)
+
+1. Scheduler fires a cron job for the Director
+2. Director runs `/orient` equivalent: reads TASKS.md, budget, recent logs
+3. Director selects tasks and spawns workers
+4. Workers execute, commit, push
+5. Director posts a summary to Slack (proactive notification)
+
+### 2.3 Data shared between components
+
+| Data | Location | Written by | Read by |
+|------|----------|------------|---------|
+| Task lists | `projects/*/TASKS.md` | Director, Workers | Director |
+| Project state | `projects/*/README.md` | Workers | Director |
+| Decision records | `decisions/*.md` | Director, Workers | All |
+| Experiment configs | `projects/*/experiments/` | Director, Workers | Workers |
+| Budget/ledger | `projects/*/budget.yaml` | Workers, Scheduler | Director, Scheduler |
+| Session logs | `.scheduler/logs/` | Scheduler | Director |
+| Worker results | In-memory (scheduler) | Workers | Director |
+| Slack thread state | Slack API + in-memory | Slack Bridge | Slack Bridge, Director |
+
+## 3. Slack Thread <-> Session Mapping
+
+### 3.1 Thread types
+
+**Conversation threads (human-initiated):**
+- Human starts a thread by messaging Youji
+- Each thread maintains its own conversation context
+- The director is invoked per-message with the full thread history
+- Thread key: `${channelId}:${threadTs}` (same as existing reference implementation)
+
+**Worker status threads (system-initiated):**
+- When a worker is spawned, the director posts a status message in the relevant thread
+- Worker progress can be streamed to this thread (living messages)
+- On completion, the final result is posted
+
+**Notification threads (system-initiated):**
+- Proactive status updates (daily summaries, experiment completions, approval requests)
+- Posted to the DM channel or a designated notification channel
+
+### 3.2 Mapping implementation
 
 ```
-1. Cron poller fires (every 30s check)
-   │
-2. Job is due → Budget Gate check
-   │
-3. Claude CLI Backend spawns session with orient prompt
-   │
-4. Agent reads repo (/orient), picks task, executes, commits
-   │
-5. Post-session pipeline (same as Flow 1, step 5)
-   │
-6. Slack notification: summary to designated channel
+Slack Thread (channelId:threadTs)
+    |
+    └── ConversationState (in-memory, from existing chat.ts pattern)
+         ├── messages: ChatMessage[]          -- conversation history
+         ├── activeWorkers: WorkerHandle[]    -- workers spawned from this thread
+         ├── generation: number              -- stale-completion guard
+         └── lastActivityMs: number          -- TTL for cleanup
 ```
 
-#### Flow 3: Chat (quick Q&A)
+The mapping is **stateless across restarts** — on restart, the director re-reads the Slack thread history via the API. In-memory state is a cache, not the source of truth. This follows the existing pattern in the reference `chat.ts`.
+
+### 3.3 Thread context for the director
+
+When the director is invoked for a thread message, it receives:
+1. **Slack thread history** (fetched via `conversations.replies`)
+2. **Repo state summary** (from `/orient`-like scan: active tasks, recent logs, budget)
+3. **Active worker statuses** (from in-memory session registry)
+
+This gives the director enough context to make decisions without maintaining persistent LLM state.
+
+## 4. Worktree Lifecycle Management
+
+### 4.1 Why worktrees
+
+Git worktrees allow multiple working directories from a single repository. Each worktree has its own branch, index, and working tree, but shares the object store. This provides:
+- **Filesystem isolation:** Workers cannot interfere with each other's file changes
+- **Branch isolation:** Each worker commits to its own branch
+- **Efficient storage:** Shared object store means minimal disk overhead
+- **Native git merge:** Standard git merge/rebase to integrate work
+
+### 4.2 Worktree lifecycle
 
 ```
-1. Mentor sends message in chat-mode channel
-   │
-2. Slack Bot classifies as chat (no task keyword)
-   │
-3. Claude CLI spawned with Sonnet profile (16 turns, 2 min max)
-   │  - Thread context from prior messages injected
-   │  - Read-only: no Edit/Write tools, no git push
-   │
-4. Response posted directly in Slack thread
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│  ALLOCATE │ --> │  ACTIVE  │ --> │ COMPLETE │ --> │  CLEANUP │
+└──────────┘     └──────────┘     └──────────┘     └──────────┘
 ```
 
-## Claude CLI Backend Design
+**ALLOCATE:**
+1. Create a branch from `main`: `git branch worker/<sessionId> main`
+2. Create a worktree: `git worktree add <path> worker/<sessionId>`
+3. Worktree path: `.worktrees/<sessionId>/` (under repo root, gitignored)
 
-**Key decision: Use `claude` CLI (Claude Code) instead of the Agent SDK.**
+**ACTIVE:**
+1. Worker agent runs with `cwd` set to the worktree path
+2. Worker reads/writes files, runs commands, commits — all within the worktree
+3. The CLAUDE.md and project files are visible (shared repo structure)
+4. Worker commits to `worker/<sessionId>` branch
 
-The existing `ClaudeBackend` in `backend.ts` wraps `@anthropic-ai/claude-agent-sdk`. The new backend replaces this with `claude` CLI process spawning. This is the single most impactful change.
+**COMPLETE:**
+1. Worker session ends (success, timeout, or error)
+2. Scheduler captures the worker's commits
+3. Rebase the worker branch onto current `main`: `git rebase main worker/<sessionId>`
+4. Fast-forward `main` to the rebased branch (or use push queue for serialization)
+5. If rebase conflicts: park the branch, notify director for resolution
 
-### Why Claude CLI over Agent SDK
+**CLEANUP:**
+1. Remove the worktree: `git worktree remove <path>`
+2. Delete the branch: `git branch -d worker/<sessionId>`
+3. Run periodically (not just on completion — handle abandoned worktrees)
 
-| Aspect | Agent SDK | Claude CLI |
-|--------|-----------|------------|
-| MCP support | Manual setup | Native (reads .claude/settings.json) |
-| Skills | Manual injection | Native (/skill invocation) |
-| CLAUDE.md | Must inject as system prompt | Auto-loaded |
-| Tool permissions | Programmatic | --dangerously-skip-permissions or allowedTools |
-| Output format | SDK events | `--output-format stream-json` (NDJSON) |
-| Plan mode | Must handle SDK events | Native support |
-| Dependencies | npm package + API key | CLI binary on PATH |
-| Session resume | SDK session ID | `--resume` flag |
-| Cost tracking | SDK events | JSON result message |
-| Model selection | `--model` option | `--model` option |
-| Agent Teams | SDK agents config | `--agent-teams` flag (if available) |
-
-### Claude CLI Invocation Pattern
+### 4.3 Worktree manager module
 
 ```typescript
-// Spawn pattern (replaces sdk.ts)
-const proc = spawn("claude", [
-  "-p",                           // print mode (non-interactive)
-  "--output-format", "stream-json", // NDJSON progress stream
-  "--model", profile.model,
-  "--max-turns", String(profile.maxTurns),
-  "--dangerously-skip-permissions", // headless autonomous mode
-  prompt,
-], {
-  cwd: repoDir,
-  stdio: ["pipe", "pipe", "pipe"],
-  env: { ...process.env },
-  timeout: profile.maxDurationMs,
-});
+interface WorktreeManager {
+  /** Allocate a new worktree for a worker session. Returns the worktree path. */
+  allocate(sessionId: string, baseBranch?: string): Promise<string>;
+
+  /** Mark a worktree as complete and merge its branch back to main. */
+  complete(sessionId: string): Promise<MergeResult>;
+
+  /** Remove a worktree and its branch. */
+  cleanup(sessionId: string): Promise<void>;
+
+  /** List all active worktrees. */
+  list(): Promise<WorktreeInfo[]>;
+
+  /** Clean up abandoned worktrees (no active session, older than TTL). */
+  gc(ttlMs: number): Promise<string[]>;
+}
+
+interface MergeResult {
+  status: "merged" | "conflict" | "no-commits";
+  branch: string;
+  commitCount: number;
+  conflictFiles?: string[];
+}
 ```
 
-The JSON stream from `--output-format stream-json` emits the same event types as the existing `parseCursorMessage` / `parseOpenCodeMessage` parsers. The existing `onMessage` callback pattern and progress handler infrastructure can be reused with minimal changes.
+### 4.4 Concurrency considerations
 
-### Backend Module Refactoring
+- **Max worktrees:** Limited by `maxConcurrentWorkers` in scheduler config. Recommended default: 4 (matches typical CPU core count for local execution).
+- **Push serialization:** The existing push queue handles this. Each worktree's merge is enqueued as a push request.
+- **Conflict resolution:** If two workers modify the same file, the second-to-merge will encounter a rebase conflict. Strategy: park the conflicting branch, notify the director, let a subsequent worker or the director resolve it.
+- **Worktree cleanup on crash:** The `gc()` method runs periodically (e.g., every 30 minutes) to clean up worktrees whose sessions no longer exist.
 
-**Remove:** `ClaudeBackend` (SDK), `CursorBackend`, `OpenCodeBackend`, `FallbackBackend`
-**Remove:** `sdk.ts` (Agent SDK wrapper), `opencode-db.ts`, model maps, fallback detection
-**Replace with:** Single `ClaudeCLIBackend` class
+## 5. Build Order
+
+The components have clear dependencies. Build in this order:
+
+### Phase 0: Foundation (no new features, just structure)
+
+**0.1 — Project scaffolding**
+- Set up the Open-Youji package structure
+- Decide on module boundaries (single package vs. monorepo packages)
+- Configure build tooling (TypeScript, vitest)
+- Done when: `npm run build` and `npm test` pass with an empty test
+
+**0.2 — Extract reusable scheduler primitives**
+- Identify which modules from `infra/scheduler/` are needed
+- Key modules to reuse: `agent.ts`, `backend.ts`, `sdk.ts`, `session.ts`, `push-queue.ts`, `api/server.ts`
+- Either import directly or copy + adapt
+- Done when: Can `spawnAgent()` from the new package
+
+### Phase 1: Worktree Manager
+
+**1.1 — Worktree lifecycle (allocate/cleanup)**
+- Implement `WorktreeManager` with `allocate()`, `cleanup()`, `list()`, `gc()`
+- Test with real git operations (create repo, create worktree, verify isolation)
+- Done when: Can allocate a worktree, run `git commit` in it, and clean it up
+
+**1.2 — Worktree merge-back**
+- Implement `complete()` with rebase-onto-main logic
+- Handle the conflict case (park branch, return conflict info)
+- Integrate with existing push queue for serialization
+- Done when: Two worktrees with non-conflicting changes both merge to main
+
+### Phase 2: Worker Orchestration
+
+**2.1 — Worker spawning from director context**
+- Define the interface the director uses to spawn workers
+- Implement worker lifecycle: spawn in worktree -> monitor -> collect result -> merge
+- Done when: Can programmatically spawn a worker, have it edit a file, and see the change on main
+
+**2.2 — Worker pool management**
+- Concurrency limits, queue for pending work
+- Session tracking (active workers, their status, their worktrees)
+- Done when: Can run N workers concurrently with proper limits
+
+### Phase 3: Slack Bridge
+
+**3.1 — Slack connection and message routing**
+- Adapt the reference Slack implementation for the new architecture
+- Socket Mode connection, message receipt, thread context fetching
+- Done when: Bot receives a Slack message and logs it
+
+**3.2 — Director invocation from Slack**
+- On message receipt, invoke Claude with thread context + repo state
+- Post Claude's response back to the thread
+- Done when: Can have a basic conversation with the bot in Slack
+
+### Phase 4: Director Intelligence
+
+**4.1 — Director as task orchestrator**
+- Give the director the ability to spawn workers via a tool/function
+- Director reads TASKS.md, decides what to work on, spawns workers
+- Done when: Human says "work on X" in Slack, director spawns a worker that does it
+
+**4.2 — Director status reporting**
+- Director monitors worker progress, reports to Slack
+- Living messages for in-progress work
+- Completion summaries posted to thread
+- Done when: Human can see worker progress in Slack in real time
+
+**4.3 — Autonomous scheduling**
+- Cron-triggered director sessions (like existing scheduler)
+- Director picks tasks autonomously, spawns workers, reports results
+- Done when: System does useful work without human prompting
+
+### Phase 5: Production Hardening
+
+**5.1 — Error handling and recovery**
+- Worker crashes, timeout handling, orphaned worktree cleanup
+- Director error handling (Slack reconnection, Claude API errors)
+- Done when: System recovers gracefully from worker crashes
+
+**5.2 — Observability**
+- Session metrics (cost, duration, turns) via existing metrics module
+- Control API endpoint for system status
+- Done when: `/api/status` returns comprehensive system state
+
+**5.3 — Budget and governance**
+- Budget tracking per worker session
+- Approval gates for resource-intensive operations
+- Done when: Budget limits are enforced and visible in Slack
+
+### Dependency graph
 
 ```
-Before (backend.ts):
-  ClaudeBackend (SDK) → CursorBackend (CLI) → OpenCodeBackend (CLI) → FallbackBackend
-
-After (backend.ts):
-  ClaudeCLIBackend (CLI spawn only)
+Phase 0 (scaffolding)
+    |
+    v
+Phase 1 (worktree manager) ──────────────────┐
+    |                                          |
+    v                                          v
+Phase 2 (worker orchestration)          Phase 3 (Slack bridge)
+    |                                          |
+    └──────────────┬───────────────────────────┘
+                   |
+                   v
+            Phase 4 (director intelligence)
+                   |
+                   v
+            Phase 5 (production hardening)
 ```
 
-The `AgentBackend` interface stays the same (`runQuery`, `runSupervised`). The `SessionHandle` interface stays the same (`interrupt`, `backend`). Only the implementations change.
+Phases 1 and 3 can proceed in parallel. Phase 2 depends on Phase 1. Phase 4 depends on both Phases 2 and 3. Phase 5 depends on Phase 4.
 
-### Message Parsing
+## 6. Key Architectural Decisions
 
-Claude CLI `--output-format stream-json` emits NDJSON with types:
-- `system` (init, with session_id)
-- `assistant` (text blocks, tool_use blocks)
-- `tool_result` (tool outputs)
-- `result` (final: cost, turns, duration, session_id)
+### 6.1 Claude Agent SDK, not API
 
-This maps directly to the existing `SDKMessage` type. The `parseCursorMessage` function is already the right shape — rename/adapt it for Claude CLI output.
+All agent sessions (director and workers) run via the Claude Agent SDK, which wraps the local Claude Code CLI. This means:
+- No direct Anthropic API calls — the SDK handles model selection, tool use, and session management
+- Workers get full Claude Code capabilities (file read/write, bash, git)
+- The existing backend abstraction (Claude/Cursor/opencode) is reusable
 
-## Slack Integration Design
+### 6.2 Director as event-driven, not persistent session
 
-**Promote from reference to production.** The existing `reference-implementations/slack/` is a comprehensive 700+ line implementation. The migration is:
+The director is invoked per-event (Slack message, cron trigger, worker completion), not as a persistent LLM session. Rationale:
+- Persistent sessions accumulate context and cost
+- Event-driven aligns with the "repo is memory" philosophy
+- Each invocation re-reads the repo for fresh state
+- Thread history from Slack provides conversational continuity
 
-1. Move `reference-implementations/slack/slack.ts` → `src/slack.ts` (already exists as stub)
-2. Move `reference-implementations/slack/chat/` → `src/chat/`
-3. Move `reference-implementations/slack/living-message*.ts` → `src/`
-4. Wire into `cli.ts` startup (Socket Mode connection)
-5. Update imports from reference-local types to main `types.ts`
+### 6.3 Worktrees over branches-only
 
-### Slack App Structure
+Using git worktrees (not just branches) because workers need filesystem isolation. A worker running `npm test` or `python script.py` needs its own working directory. Branches alone would require the scheduler to manage file checkouts, which is fragile and racy.
 
-```
-Slack App (Socket Mode)
-├── Event: message (DM or channel)
-│   ├── Chat-mode channel → Chat agent (Sonnet, read-only)
-│   ├── Dev-mode channel → Full agent access
-│   └── DM → Deep work or chat (based on message content)
-├── Event: app_mention
-│   └── Same as message routing
-├── Slash commands (optional)
-│   ├── /status → Current session + experiment status
-│   ├── /budget → Budget dashboard
-│   └── /approve <id> → Approval queue resolution
-├── Actions (Block Kit buttons)
-│   ├── approve_* → Approve pending item
-│   └── reject_* → Reject pending item
-└── Outbound notifications
-    ├── Session start → Channel message
-    ├── Session progress → Thread updates (living message)
-    ├── Session complete → Thread summary
-    ├── Experiment events → Thread updates
-    └── Approval requests → DM with buttons
-```
+### 6.4 Reuse existing scheduler infrastructure
 
-### Message Format: Summary + Thread Pattern
+Rather than building from scratch, Open-Youji extends the existing scheduler with:
+- Worktree management (new module)
+- Director lifecycle management (new module)
+- Worker pool coordination (extends existing session tracking)
+- Slack bridge (adapts existing reference implementation)
 
-```
-Channel message (summary):
-┌─────────────────────────────────────────┐
-│ ✅ Session complete: work-session       │
-│ Duration: 312s | Turns: 45 | Cost: $2.31│
-│ Task: Analyze experiment results for X  │
-│ 📝 2 files committed, pushed to origin  │
-│                                         │
-│ [View details in thread →]              │
-└─────────────────────────────────────────┘
-
-Thread (details):
-├── 🔧 Read projects/x/EXPERIMENT.md
-├── 📊 Analyzed 96 results across 3 dimensions
-├── 📝 Wrote findings to EXPERIMENT.md
-├── ✅ Deep work complete (312s, 45 turns, $2.31)
-│   <full agent summary text>
-```
-
-## Patterns to Follow
-
-### Pattern 1: Single Backend, Single Binary
-
-**What:** All agent sessions (work, chat, autofix, deep work) spawn the same `claude` binary with different profiles (model, max-turns, timeout).
-**When:** Always. No fallback chain, no backend negotiation.
-**Why:** Eliminates the entire backend abstraction layer (FallbackBackend, shouldFallback, isRateLimitError, isBillingError). If Claude CLI is unavailable, the system is down — fail loudly.
-
-### Pattern 2: In-Process Slack + Scheduler
-
-**What:** Slack bot runs in the same Node.js process as the scheduler daemon. Not a separate service.
-**When:** Single-mentor, local Mac deployment.
-**Why:** Avoids inter-process communication complexity. The reference implementation already assumes in-process access to job store, session state, and experiment tracking. Separate services would require an API layer that adds complexity without benefit for a single-user system.
-
-### Pattern 3: Event-Driven Task Creation
-
-**What:** Slack messages create ephemeral Job objects that are immediately executed (not persisted to jobs.json). Scheduled jobs remain cron-based and persistent.
-**When:** Mentor sends a task via Slack.
-**Why:** The existing `spawnDeepWork` function in `event-agents.ts` already implements this pattern. It creates an agent session directly without going through the job store. This is the right approach — Slack-triggered tasks are one-shot, not recurring.
-
-### Pattern 4: Thread-Based Context Inheritance
-
-**What:** When a mentor replies in a Slack thread, the thread history is injected into the new agent session's prompt. This allows multi-turn research conversations.
-**When:** Follow-up messages in a Slack thread.
-**Why:** Already implemented in the reference chat system. Agent sessions are stateless, but thread context provides continuity.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Separate Slack Microservice
-
-**What:** Running the Slack bot as a separate process/service from the scheduler.
-**Why bad:** Requires IPC, shared state management, deployment coordination. For a single-user local Mac system, this is pure overhead.
-**Instead:** In-process Slack bot within the scheduler daemon.
-
-### Anti-Pattern 2: Persistent Task Queue for Slack Requests
-
-**What:** Writing Slack-triggered tasks to a database/file queue, then having the scheduler pick them up.
-**Why bad:** Adds latency, persistence complexity, and failure modes. Slack requests need immediate response — the mentor is watching.
-**Instead:** Direct spawn via `spawnDeepWork` pattern. The session is the task.
-
-### Anti-Pattern 3: Streaming Raw Agent Output to Slack
-
-**What:** Forwarding every Claude CLI output event directly to Slack.
-**Why bad:** Creates noisy, unreadable threads. Tool call details and intermediate reasoning are not useful for the mentor.
-**Instead:** Use the existing `buildProgressHandler` with tool-summary batching (2s debounce) and text-only forwarding.
-
-### Anti-Pattern 4: Keeping Multi-Backend Fallback
-
-**What:** Maintaining the Claude SDK, Cursor, or opencode backends "just in case."
-**Why bad:** Dead code, maintenance burden, test complexity. The whole point of this migration is simplification.
-**Instead:** Remove all backends except Claude CLI. If Claude CLI breaks, fix Claude CLI.
-
-## Suggested Build Order
-
-Dependencies between components determine build order. Each phase produces a working system.
-
-### Phase 1: Claude CLI Backend (Foundation)
-
-**Build:**
-- `ClaudeCLIBackend` class implementing existing `AgentBackend` interface
-- Claude CLI JSON stream parser (adapt from existing `parseCursorMessage`)
-- Update `resolveBackend()` to return `ClaudeCLIBackend` only
-
-**Why first:** Everything depends on the execution engine. The existing scheduler, executor, event-agents, and Slack code all call through `AgentBackend`. Swapping the implementation while keeping the interface means all downstream code continues to work.
-
-**Done when:** `executeJob()` successfully spawns a Claude CLI session, captures output, and records metrics. Existing cron jobs work with the new backend.
-
-**Dependencies:** None — pure replacement of existing abstraction.
-
-### Phase 2: Backend Cleanup (Simplification)
-
-**Build:**
-- Remove `sdk.ts` (Agent SDK wrapper), `opencode-db.ts`
-- Remove `ClaudeBackend`, `CursorBackend`, `OpenCodeBackend`, `FallbackBackend` from `backend.ts`
-- Remove `@anthropic-ai/claude-agent-sdk` dependency from package.json
-- Remove backend preference system (`backend-preference.ts`, `AGENT_BACKEND` env var)
-- Remove model maps (CURSOR_MODEL_MAP, OPENCODE_MODEL)
-- Simplify `agent.ts`: remove `BACKEND_PROFILE_OVERRIDES` (only one backend now)
-
-**Why second:** After Phase 1 validates the new backend works, remove the old code. This is mechanical deletion — low risk, high signal (if tests still pass, the migration is clean).
-
-**Done when:** `npm run build` succeeds, all tests pass, `backend.ts` contains only `ClaudeCLIBackend`.
-
-**Dependencies:** Phase 1.
-
-### Phase 3: Slack Bot (Integration)
-
-**Build:**
-- Move reference Slack implementation to production (`reference-implementations/slack/` → `src/`)
-- Wire Slack Socket Mode connection into `cli.ts` startup
-- Connect `notifySessionStarted` / `notifySessionComplete` to production Slack bot
-- Implement message routing: DM → deep work, channel → chat
-- Connect `spawnDeepWork` and chat to use new Claude CLI backend
-
-**Why third:** The Slack bot is the user-facing interface. It depends on the execution engine (Phase 1) being stable. The reference implementation is comprehensive — this phase is primarily wiring, not new feature development.
-
-**Done when:** Mentor can send a Slack DM, Youji spawns a Claude CLI session, and posts results back to the thread.
-
-**Dependencies:** Phase 1 (Claude CLI backend must work).
-
-### Phase 4: Polish + Self-Evolution
-
-**Build:**
-- Approval UX via Slack buttons (Block Kit actions)
-- Status dashboard via slash commands
-- Self-evolution: Youji creates PRs via `gh` CLI, posts PR link to Slack for review
-- Living message integration (real-time session progress in a single updating message)
-
-**Why last:** These are quality-of-life features. The system is functional after Phase 3. Phase 4 makes it polished.
-
-**Done when:** Full interaction loop works — mentor assigns tasks, gets results, approves PRs, checks status, all through Slack.
-
-**Dependencies:** Phase 3 (Slack bot must be wired).
-
-## Scalability Considerations
-
-| Concern | Current (1 mentor) | At 5 mentors | At 20 mentors |
-|---------|---------------------|--------------|---------------|
-| Concurrent sessions | 1-2 | Needs session queue | Needs external job queue (Redis/BullMQ) |
-| Slack channels | 1 DM + 1 channel | Per-mentor DMs | Dedicated workspace, channel-per-project |
-| Claude CLI cost | ~$5-20/day | Need per-user budgets | Need billing split |
-| Git conflicts | Push queue handles | Push queue handles | Branch-per-session strategy |
-| Process management | pm2 | pm2 | Kubernetes/Docker |
-
-**For the current single-mentor scope:** None of these scalability concerns apply. The in-process architecture is correct. Do not pre-optimize.
-
-## Sources
-
-- Existing codebase analysis: `infra/scheduler/src/backend.ts`, `executor.ts`, `event-agents.ts`, `agent.ts`, `sdk.ts` (HIGH confidence)
-- Reference Slack implementation: `infra/scheduler/reference-implementations/slack/` (HIGH confidence — first-party code)
-- Claude CLI documentation: `claude -p --output-format stream-json` behavior (MEDIUM confidence — based on Cursor/opencode CLI patterns in codebase, which follow the same NDJSON convention)
-- Architecture decisions: `decisions/` directory, 66 ADRs (HIGH confidence — first-party decisions)
+The existing push queue, backend abstraction, session registry, and control API are reused as-is.
