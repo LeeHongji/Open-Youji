@@ -28,11 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The system enforces a configurable maximum concurrent worktree limit (default N=4) and rejects allocation when at capacity
   3. The remote repo is configured as `https://github.com/LeeHongji/Open-Youji` and worktree branches can push to it
   4. Every session (director or worker) produces structured JSONL metrics and logs that can be inspected for debugging
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- WorktreeManager core (TDD): allocate, release, concurrency limit, recovery
+- [ ] 01-02-PLAN.md -- Metrics extension, gitignore, remote URL configuration
 
 ### Phase 2: Slack Bridge
 **Goal**: Mentor can talk to the system via Slack threads with reliable message routing and reconnection
