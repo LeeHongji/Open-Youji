@@ -1,110 +1,57 @@
 /** Tests for WorktreeManager: git worktree lifecycle for worker agent isolation. */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// We'll mock child_process and fs before importing the module
-vi.mock("node:child_process", () => ({
-  execFile: vi.fn(),
-}));
-
-vi.mock("node:fs/promises", () => ({
-  access: vi.fn(),
-  mkdir: vi.fn(),
-}));
-
-vi.mock("./auto-commit.js", () => ({
-  autoCommitOrphanedFiles: vi.fn().mockResolvedValue(null),
-}));
-
-import { execFile } from "node:child_process";
-import { access, mkdir } from "node:fs/promises";
-import { autoCommitOrphanedFiles } from "./auto-commit.js";
 import {
   WorktreeManager,
   parseWorktreeList,
   type WorktreeConfig,
-  type WorktreeInfo,
-  type WorktreeAllocResult,
-  type WorktreeReleaseResult,
+  type ExecFn,
 } from "./worktree.js";
 
-const mockExecFile = vi.mocked(execFile);
-const mockAccess = vi.mocked(access);
-const mockMkdir = vi.mocked(mkdir);
-const mockAutoCommit = vi.mocked(autoCommitOrphanedFiles);
+// ── Test helpers ─────────────────────────────────────────────────────────────
 
-/** Helper: make execFile resolve with stdout/stderr. */
-function mockExec(stdout = "", stderr = ""): void {
-  mockExecFile.mockImplementation(
-    ((_cmd: unknown, _args: unknown, _opts: unknown, cb?: Function) => {
-      if (cb) {
-        cb(null, stdout, stderr);
-        return undefined as any;
-      }
-      // promisify path
-      return undefined as any;
-    }) as any,
-  );
-}
-
-/**
- * Helper: make execFile calls resolve based on arguments.
- * Takes a map of "command arg1 arg2..." -> { stdout, stderr } or Error.
- */
-function mockExecMulti(
-  responses: Record<string, { stdout?: string; stderr?: string } | Error>,
-  fallback: { stdout?: string; stderr?: string } = { stdout: "" },
-): void {
-  mockExecFile.mockImplementation(
-    ((cmd: string, args: string[], _opts: unknown, cb?: Function) => {
-      const key = `${cmd} ${args.join(" ")}`;
-      // Find matching key (prefix match for flexibility)
-      const matchKey = Object.keys(responses).find((k) => key.startsWith(k) || key.includes(k));
-      const response = matchKey ? responses[matchKey] : fallback;
-
-      if (cb) {
-        if (response instanceof Error) {
-          cb(response, "", "");
-        } else {
-          cb(null, response.stdout ?? "", response.stderr ?? "");
-        }
-        return undefined as any;
-      }
-      return undefined as any;
-    }) as any,
-  );
-}
-
-/**
- * Create a WorktreeManager with promisified exec mocked to handle call sequences.
- */
-function createManager(config?: Partial<WorktreeConfig>): WorktreeManager {
-  return new WorktreeManager({
-    repoDir: "/repo",
-    maxWorktrees: 4,
-    ...config,
+/** Build a mock exec function from a sequence of responses. */
+function mockExecSequence(
+  responses: Array<{ stdout?: string; stderr?: string } | Error>,
+): ExecFn {
+  let callIndex = 0;
+  return vi.fn(async (_cmd: string, _args: string[], _opts: { cwd: string }) => {
+    const resp = responses[callIndex] ?? { stdout: "" };
+    callIndex++;
+    if (resp instanceof Error) throw resp;
+    return { stdout: resp.stdout ?? "", stderr: resp.stderr ?? "" };
   });
 }
 
-/** Setup: make promisify(execFile) return a mock function we can control per-call. */
-function setupExecQueue(responses: Array<{ stdout?: string; stderr?: string } | Error>): void {
+/** Build a mock exec that dispatches based on call count per-call. */
+function mockExecAlternating(
+  pattern: (callIndex: number) => { stdout?: string; stderr?: string } | Error,
+): ExecFn {
   let callIndex = 0;
-  mockExecFile.mockImplementation(
-    ((_cmd: unknown, _args: unknown, _opts: unknown, cb?: Function) => {
-      const resp = responses[callIndex] ?? { stdout: "" };
-      callIndex++;
-      if (cb) {
-        if (resp instanceof Error) {
-          cb(resp, "", "");
-        } else {
-          cb(null, resp.stdout ?? "", resp.stderr ?? "");
-        }
-        return undefined as any;
-      }
-      return undefined as any;
-    }) as any,
-  );
+  return vi.fn(async (_cmd: string, _args: string[], _opts: { cwd: string }) => {
+    const resp = pattern(callIndex);
+    callIndex++;
+    if (resp instanceof Error) throw resp;
+    return { stdout: resp.stdout ?? "", stderr: resp.stderr ?? "" };
+  });
 }
+
+function createManager(
+  overrides?: Partial<WorktreeConfig> & { execFn?: ExecFn; autoCommitFn?: () => Promise<unknown> },
+): { mgr: WorktreeManager; exec: ExecFn; autoCommit: ReturnType<typeof vi.fn> } {
+  const execFn = overrides?.execFn ?? mockExecSequence([]);
+  const autoCommitFn = overrides?.autoCommitFn ?? vi.fn(async () => null);
+  const mgr = new WorktreeManager({
+    repoDir: "/repo",
+    maxWorktrees: 4,
+    ...overrides,
+    exec: execFn,
+    autoCommit: autoCommitFn as any,
+  });
+  return { mgr, exec: execFn, autoCommit: autoCommitFn as ReturnType<typeof vi.fn> };
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("parseWorktreeList", () => {
   it("parses empty output", () => {
@@ -158,21 +105,14 @@ detached
 });
 
 describe("WorktreeManager", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockAccess.mockResolvedValue(undefined);
-    mockMkdir.mockResolvedValue(undefined);
-    mockAutoCommit.mockResolvedValue(null);
-  });
-
   describe("allocate", () => {
     it("creates worktree and returns info on success", async () => {
-      const mgr = createManager();
-      // Mock sequence: git rev-parse (check branch), git worktree add
-      setupExecQueue([
-        new Error("branch not found"),    // git rev-parse --verify worker/task-1 → not found
-        { stdout: "" },                    // git worktree add
-      ]);
+      const { mgr } = createManager({
+        execFn: mockExecSequence([
+          new Error("branch not found"),  // git rev-parse --verify worker/task-1
+          { stdout: "" },                  // git worktree add
+        ]),
+      });
 
       const result = await mgr.allocate("task-1", "session-abc");
       expect(result.ok).toBe(true);
@@ -185,11 +125,12 @@ describe("WorktreeManager", () => {
     });
 
     it("returns already-exists if worktree is already allocated", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("branch not found"),
-        { stdout: "" },
-      ]);
+      const { mgr } = createManager({
+        execFn: mockExecSequence([
+          new Error("branch not found"),
+          { stdout: "" },
+        ]),
+      });
 
       await mgr.allocate("task-1");
 
@@ -201,11 +142,13 @@ describe("WorktreeManager", () => {
     });
 
     it("returns at-capacity when maxWorktrees reached", async () => {
-      const mgr = createManager({ maxWorktrees: 1 });
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
+      const { mgr } = createManager({
+        maxWorktrees: 1,
+        execFn: mockExecSequence([
+          new Error("not found"),
+          { stdout: "" },
+        ]),
+      });
 
       await mgr.allocate("task-1");
 
@@ -217,24 +160,26 @@ describe("WorktreeManager", () => {
     });
 
     it("cleans up stale branch before allocating", async () => {
-      const mgr = createManager();
-      // Branch exists but no worktree for it in allocations
-      setupExecQueue([
+      const execFn = mockExecSequence([
         { stdout: "abc123\n" },   // git rev-parse --verify → branch exists
         { stdout: "" },            // git branch -D (delete stale)
         { stdout: "" },            // git worktree add
       ]);
+      const { mgr } = createManager({ execFn });
 
       const result = await mgr.allocate("task-1");
       expect(result.ok).toBe(true);
+      // Verify branch -D was called
+      expect(execFn).toHaveBeenCalledTimes(3);
     });
 
     it("returns git-error on worktree add failure", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("not found"),                    // branch check
-        new Error("fatal: worktree add failed"),   // worktree add fails
-      ]);
+      const { mgr } = createManager({
+        execFn: mockExecSequence([
+          new Error("not found"),                    // branch check
+          new Error("fatal: worktree add failed"),   // worktree add fails
+        ]),
+      });
 
       const result = await mgr.allocate("task-1");
       expect(result.ok).toBe(false);
@@ -245,24 +190,12 @@ describe("WorktreeManager", () => {
     });
 
     it("serializes concurrent allocate calls", async () => {
-      const mgr = createManager({ maxWorktrees: 2 });
-      let callCount = 0;
-      mockExecFile.mockImplementation(
-        ((_cmd: unknown, _args: unknown, _opts: unknown, cb?: Function) => {
-          callCount++;
-          if (cb) {
-            if (callCount % 2 === 1) {
-              // Branch check: not found
-              cb(new Error("not found"), "", "");
-            } else {
-              // Worktree add: success
-              cb(null, "", "");
-            }
-            return undefined as any;
-          }
-          return undefined as any;
-        }) as any,
-      );
+      const execFn = mockExecAlternating((i) => {
+        // Alternates: branch check (error) → worktree add (success)
+        if (i % 2 === 0) return new Error("not found");
+        return { stdout: "" };
+      });
+      const { mgr } = createManager({ maxWorktrees: 2, execFn });
 
       const [r1, r2] = await Promise.all([
         mgr.allocate("task-1"),
@@ -275,22 +208,11 @@ describe("WorktreeManager", () => {
     });
 
     it("concurrent allocates respect capacity limit", async () => {
-      const mgr = createManager({ maxWorktrees: 1 });
-      let callCount = 0;
-      mockExecFile.mockImplementation(
-        ((_cmd: unknown, _args: unknown, _opts: unknown, cb?: Function) => {
-          callCount++;
-          if (cb) {
-            if (callCount % 2 === 1) {
-              cb(new Error("not found"), "", "");
-            } else {
-              cb(null, "", "");
-            }
-            return undefined as any;
-          }
-          return undefined as any;
-        }) as any,
-      );
+      const execFn = mockExecAlternating((i) => {
+        if (i % 2 === 0) return new Error("not found");
+        return { stdout: "" };
+      });
+      const { mgr } = createManager({ maxWorktrees: 1, execFn });
 
       const [r1, r2] = await Promise.all([
         mgr.allocate("task-1"),
@@ -309,7 +231,7 @@ describe("WorktreeManager", () => {
 
   describe("release", () => {
     it("returns not-found for unknown taskId", async () => {
-      const mgr = createManager();
+      const { mgr } = createManager();
       const result = await mgr.release("nonexistent");
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -318,20 +240,22 @@ describe("WorktreeManager", () => {
     });
 
     it("releases worktree with no new commits (no merge)", async () => {
-      const mgr = createManager();
-      // Allocate first
-      setupExecQueue([
-        new Error("not found"),   // branch check
-        { stdout: "" },            // worktree add
-      ]);
-      await mgr.allocate("task-1");
+      // Allocate first, then release
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async (_cmd, args) => {
+        callIndex++;
+        // Call 1: rev-parse (allocate) → not found
+        if (callIndex === 1) throw new Error("not found");
+        // Call 2: worktree add (allocate)
+        if (callIndex === 2) return { stdout: "", stderr: "" };
+        // Call 3: rev-list count (release) → 0
+        if (callIndex === 3) return { stdout: "0\n", stderr: "" };
+        // Call 4+: cleanup (worktree remove, branch -D)
+        return { stdout: "", stderr: "" };
+      });
+      const { mgr } = createManager({ execFn });
 
-      // Release: auto-commit, rev-list count=0, worktree remove, branch delete
-      setupExecQueue([
-        { stdout: "0\n" },        // git rev-list --count main..worker/task-1 → 0
-        { stdout: "" },            // git worktree remove
-        { stdout: "" },            // git branch -D
-      ]);
+      await mgr.allocate("task-1");
 
       const result = await mgr.release("task-1");
       expect(result.ok).toBe(true);
@@ -342,23 +266,24 @@ describe("WorktreeManager", () => {
     });
 
     it("merges worker branch into main on release with commits", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
-      await mgr.allocate("task-1");
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async (_cmd, args) => {
+        callIndex++;
+        // Allocate phase
+        if (callIndex === 1) throw new Error("not found");   // rev-parse
+        if (callIndex === 2) return { stdout: "", stderr: "" }; // worktree add
+        // Release phase
+        if (callIndex === 3) return { stdout: "2\n", stderr: "" }; // rev-list count
+        if (callIndex === 4) return { stdout: "", stderr: "" };    // fetch origin main
+        if (callIndex === 5) return { stdout: "", stderr: "" };    // rebase
+        if (callIndex === 6) return { stdout: "", stderr: "" };    // checkout main
+        if (callIndex === 7) return { stdout: "", stderr: "" };    // merge --ff-only
+        // Cleanup
+        return { stdout: "", stderr: "" };
+      });
+      const { mgr } = createManager({ execFn });
 
-      // Release: rev-list=2, fetch, rebase, checkout main, merge ff-only, worktree remove, branch -D
-      setupExecQueue([
-        { stdout: "2\n" },        // rev-list count
-        { stdout: "" },            // git fetch origin main
-        { stdout: "" },            // git rebase origin/main (in worktree)
-        { stdout: "" },            // git checkout main
-        { stdout: "" },            // git merge --ff-only worker/task-1
-        { stdout: "" },            // git worktree remove
-        { stdout: "" },            // git branch -D
-      ]);
+      await mgr.allocate("task-1");
 
       const result = await mgr.release("task-1");
       expect(result.ok).toBe(true);
@@ -368,24 +293,24 @@ describe("WorktreeManager", () => {
     });
 
     it("falls back to session branch on rebase conflict", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
-      await mgr.allocate("task-1");
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async (_cmd, args) => {
+        callIndex++;
+        // Allocate
+        if (callIndex === 1) throw new Error("not found");
+        if (callIndex === 2) return { stdout: "", stderr: "" };
+        // Release
+        if (callIndex === 3) return { stdout: "1\n", stderr: "" };  // rev-list
+        if (callIndex === 4) return { stdout: "", stderr: "" };      // fetch
+        if (callIndex === 5) throw new Error("CONFLICT");            // rebase fails
+        if (callIndex === 6) return { stdout: "", stderr: "" };      // rebase --abort
+        if (callIndex === 7) return { stdout: "", stderr: "" };      // branch session-task-1
+        // Cleanup
+        return { stdout: "", stderr: "" };
+      });
+      const { mgr } = createManager({ execFn });
 
-      // Release: rev-list=1, fetch, rebase FAILS, abort rebase, push fallback branch, worktree remove, branch -D
-      setupExecQueue([
-        { stdout: "1\n" },                        // rev-list count
-        { stdout: "" },                             // git fetch
-        new Error("CONFLICT"),                      // git rebase fails
-        { stdout: "" },                             // git rebase --abort
-        { stdout: "" },                             // git branch session-task-1
-        { stdout: "" },                             // git push (not done in worktree manager but we verify fallback)
-        { stdout: "" },                             // git worktree remove
-        { stdout: "" },                             // git branch -D worker/task-1
-      ]);
+      await mgr.allocate("task-1");
 
       const result = await mgr.release("task-1");
       expect(result.ok).toBe(true);
@@ -395,22 +320,22 @@ describe("WorktreeManager", () => {
       }
     });
 
-    it("calls autoCommitOrphanedFiles before release", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
+    it("calls autoCommit before release", async () => {
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async () => {
+        callIndex++;
+        if (callIndex === 1) throw new Error("not found");
+        if (callIndex === 2) return { stdout: "", stderr: "" };
+        if (callIndex === 3) return { stdout: "0\n", stderr: "" };
+        return { stdout: "", stderr: "" };
+      });
+      const autoCommitFn = vi.fn(async () => null);
+      const { mgr } = createManager({ execFn, autoCommitFn });
+
       await mgr.allocate("task-1");
-
-      setupExecQueue([
-        { stdout: "0\n" },
-        { stdout: "" },
-        { stdout: "" },
-      ]);
-
       await mgr.release("task-1");
-      expect(mockAutoCommit).toHaveBeenCalledWith(
+
+      expect(autoCommitFn).toHaveBeenCalledWith(
         "/repo/.worktrees/task-1",
         [],
       );
@@ -419,16 +344,17 @@ describe("WorktreeManager", () => {
 
   describe("list", () => {
     it("returns empty array initially", () => {
-      const mgr = createManager();
+      const { mgr } = createManager();
       expect(mgr.list()).toEqual([]);
     });
 
     it("returns allocated worktrees", async () => {
-      const mgr = createManager();
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
+      const { mgr } = createManager({
+        execFn: mockExecSequence([
+          new Error("not found"),
+          { stdout: "" },
+        ]),
+      });
       await mgr.allocate("task-1", "session-x");
 
       const items = mgr.list();
@@ -440,13 +366,15 @@ describe("WorktreeManager", () => {
 
   describe("getCapacity", () => {
     it("returns current and max", async () => {
-      const mgr = createManager({ maxWorktrees: 3 });
+      const { mgr } = createManager({
+        maxWorktrees: 3,
+        execFn: mockExecSequence([
+          new Error("not found"),
+          { stdout: "" },
+        ]),
+      });
       expect(mgr.getCapacity()).toEqual({ current: 0, max: 3 });
 
-      setupExecQueue([
-        new Error("not found"),
-        { stdout: "" },
-      ]);
       await mgr.allocate("task-1");
       expect(mgr.getCapacity()).toEqual({ current: 1, max: 3 });
     });
@@ -454,7 +382,6 @@ describe("WorktreeManager", () => {
 
   describe("recover", () => {
     it("recovers stale worktrees from git worktree list", async () => {
-      const mgr = createManager();
       const porcelainOutput = `worktree /repo
 HEAD abc1234
 branch refs/heads/main
@@ -464,37 +391,36 @@ HEAD def5678
 branch refs/heads/worker/stale-task
 
 `;
-      setupExecQueue([
-        { stdout: porcelainOutput },   // git worktree list --porcelain
-        // For stale-task recovery:
-        { stdout: "" },                 // git worktree remove --force
-        { stdout: "" },                 // git branch -D
-        { stdout: "" },                 // git worktree prune
-      ]);
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async () => {
+        callIndex++;
+        if (callIndex === 1) return { stdout: porcelainOutput, stderr: "" };
+        return { stdout: "", stderr: "" };
+      });
+      const autoCommitFn = vi.fn(async () => null);
+      const { mgr } = createManager({ execFn, autoCommitFn });
 
       const count = await mgr.recover();
       expect(count).toBe(1);
-      expect(mockAutoCommit).toHaveBeenCalled();
+      expect(autoCommitFn).toHaveBeenCalled();
     });
 
     it("returns 0 when no stale worktrees exist", async () => {
-      const mgr = createManager();
       const porcelainOutput = `worktree /repo
 HEAD abc1234
 branch refs/heads/main
 
 `;
-      setupExecQueue([
-        { stdout: porcelainOutput },
-        { stdout: "" },    // git worktree prune
-      ]);
+      const execFn: ExecFn = vi.fn(async () => {
+        return { stdout: porcelainOutput, stderr: "" };
+      });
+      const { mgr } = createManager({ execFn });
 
       const count = await mgr.recover();
       expect(count).toBe(0);
     });
 
     it("recovers multiple stale worktrees", async () => {
-      const mgr = createManager();
       const porcelainOutput = `worktree /repo
 HEAD abc1234
 branch refs/heads/main
@@ -508,17 +434,14 @@ HEAD 222222
 branch refs/heads/worker/task-b
 
 `;
-      setupExecQueue([
-        { stdout: porcelainOutput },
-        // task-a recovery
-        { stdout: "" },  // worktree remove
-        { stdout: "" },  // branch -D
-        // task-b recovery
-        { stdout: "" },  // worktree remove
-        { stdout: "" },  // branch -D
-        // prune
-        { stdout: "" },
-      ]);
+      let callIndex = 0;
+      const execFn: ExecFn = vi.fn(async () => {
+        callIndex++;
+        if (callIndex === 1) return { stdout: porcelainOutput, stderr: "" };
+        return { stdout: "", stderr: "" };
+      });
+      const autoCommitFn = vi.fn(async () => null);
+      const { mgr } = createManager({ execFn, autoCommitFn });
 
       const count = await mgr.recover();
       expect(count).toBe(2);
