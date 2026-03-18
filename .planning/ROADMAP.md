@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Worktree manager, project scaffold, and session logging infrastructure (completed 2026-03-17)
 - [x] **Phase 2: Slack Bridge** - Socket Mode connection with thread-to-session routing and reconnection (completed 2026-03-18)
-- [ ] **Phase 3: Director and Workers** - Youji director responds in Slack, decomposes tasks, spawns and monitors workers in worktrees
+- [x] **Phase 3: Director and Workers** - Youji director responds in Slack, decomposes tasks, spawns and monitors workers in worktrees (completed 2026-03-18)
 - [ ] **Phase 4: Autonomous Operation** - Cron-triggered director wake-ups, proactive reporting, and time-based resource accounting
 
 ## Phase Details
@@ -90,5 +90,5 @@ Phase 1 and Phase 2 can execute in parallel. Phase 3 depends on both. Phase 4 de
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/2 | Complete    | 2026-03-17 |
 | 2. Slack Bridge | 3/3 | Complete    | 2026-03-18 |
-| 3. Director and Workers | 1/3 | In progress | - |
+| 3. Director and Workers | 1/3 | Complete    | 2026-03-18 |
 | 4. Autonomous Operation | 0/2 | Not started | - |
