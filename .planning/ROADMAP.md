@@ -43,11 +43,12 @@ Plans:
   2. Messages sent in the same Slack thread are routed to the same session context, and new threads create new contexts
   3. The bot automatically reconnects on WebSocket disconnect without losing conversation state
   4. Concurrent messages in the same thread are serialized (no race conditions from interleaved handling)
-**Plans**: TBD
+**Plans**: 3 plans (2 waves)
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [x] 02-01-PLAN.md -- ThreadStore (SQLite persistence) + ConversationLock (per-thread mutex) [Wave 1]
+- [ ] 02-02-PLAN.md -- SlackBot core (Socket Mode connection, event routing, thread key derivation) [Wave 1]
+- [ ] 02-03-PLAN.md -- SlackBridge integration (wire bot + store + mutex, update slack.ts stub) [Wave 2]
 
 ### Phase 3: Director and Workers
 **Goal**: Mentor can converse with Youji in Slack, and Youji can spawn workers to execute tasks and report results
@@ -88,6 +89,6 @@ Phase 1 and Phase 2 can execute in parallel. Phase 3 depends on both. Phase 4 de
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/2 | Complete    | 2026-03-17 |
-| 2. Slack Bridge | 0/2 | Not started | - |
+| 2. Slack Bridge | 2/3 | In Progress | - |
 | 3. Director and Workers | 0/3 | Not started | - |
 | 4. Autonomous Operation | 0/2 | Not started | - |

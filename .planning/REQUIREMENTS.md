@@ -14,11 +14,11 @@
 
 ### Slack Bridge
 
-- [ ] **SLACK-01**: Slack bot connects via Socket Mode (no public HTTP endpoint needed)
-- [ ] **SLACK-02**: Messages in a Slack thread are routed to the same director session context
-- [ ] **SLACK-03**: New Slack threads create new session contexts
-- [ ] **SLACK-04**: Bot reconnects automatically on WebSocket disconnect without losing conversation state
-- [ ] **SLACK-05**: Per-thread mutex prevents concurrent message handling races
+- [x] **SLACK-01**: Slack bot connects via Socket Mode (no public HTTP endpoint needed)
+- [x] **SLACK-02**: Messages in a Slack thread are routed to the same director session context
+- [x] **SLACK-03**: New Slack threads create new session contexts
+- [x] **SLACK-04**: Bot reconnects automatically on WebSocket disconnect without losing conversation state
+- [x] **SLACK-05**: Per-thread mutex prevents concurrent message handling races
 
 ### Director (Youji)
 
@@ -88,11 +88,11 @@
 | FOUND-02 | Phase 1 | Complete |
 | FOUND-03 | Phase 1 | Complete |
 | FOUND-04 | Phase 1 | Complete |
-| SLACK-01 | Phase 2 | Pending |
-| SLACK-02 | Phase 2 | Pending |
-| SLACK-03 | Phase 2 | Pending |
-| SLACK-04 | Phase 2 | Pending |
-| SLACK-05 | Phase 2 | Pending |
+| SLACK-01 | Phase 2 | Complete |
+| SLACK-02 | Phase 2 | Complete |
+| SLACK-03 | Phase 2 | Complete |
+| SLACK-04 | Phase 2 | Complete |
+| SLACK-05 | Phase 2 | Complete |
 | DIR-01 | Phase 3 | Pending |
 | DIR-02 | Phase 3 | Pending |
 | DIR-03 | Phase 4 | Pending |
