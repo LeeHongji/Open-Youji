@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-18T07:41:03Z"
+last_updated: "2026-03-18T07:50:30Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Youji runs autonomously as a research institute director -- she talks to the mentor via Slack, schedules and monitors worker agents, and keeps the research program moving forward.
-**Current focus:** Phase 3 in progress: Director and Workers
+**Current focus:** Phase 3 complete. Phase 4 next.
 
 ## Current Position
 
-Phase: 3 of 4 (Director and Workers) -- IN PROGRESS
-Plan: 2 of 3 in current phase (03-02 complete)
-Status: Plan 03-02 complete, 03-03 next
-Last activity: 2026-03-18 -- Completed 03-02 WorkerManager (task picking, worktree execution, push queue)
+Phase: 3 of 4 (Director and Workers) -- COMPLETE
+Plan: 3 of 3 in current phase (03-03 complete)
+Status: Phase 3 complete, Phase 4 next
+Last activity: 2026-03-18 -- Completed 03-03 Director-Worker Integration
 
-Progress: [██████░░░░] 67% (Phase 3)
+Progress: [██████████] 100% (Phase 3)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 4 min
-- Total execution time: 0.44 hours
+- Total execution time: 0.49 hours
 
 **By Phase:**
 
@@ -42,7 +42,7 @@ Progress: [██████░░░░] 67% (Phase 3)
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | 8 min | 4 min |
 | 02-slack-bridge | 3/3 | 11 min | 3.7 min |
-| 03-director-and-workers | 2/3 | 7 min | 3.5 min |
+| 03-director-and-workers | 3/3 | 10 min | 3.3 min |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -53,6 +53,7 @@ Progress: [██████░░░░] 67% (Phase 3)
 | Phase 02 P03 | 4 | 2 tasks | 3 files |
 | Phase 03 P01 | 3 | 2 tasks | 4 files |
 | Phase 03 P02 | 4 | 1 task | 4 files |
+| Phase 03 P03 | 3 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - Worker loop is fire-and-forget async (startProject returns immediately)
 - Auto-retry once on failure, then mark [blocked-by: execution failure]
 - markTaskDone finds task by text match (robust to index shifts)
+- Two spawn paths for DIR-02: director [spawn-worker] tag + scheduler 60s poll fallback
+- WorkerManager lifecycle tied to slack-bridge start/stop (single owner)
+- Completion handler uses fire-and-forget notification pattern
 
 ### Pending Todos
 
@@ -97,5 +101,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-18
-Stopped at: Completed 03-02-PLAN.md (WorkerManager)
-Resume file: .planning/phases/03-director-and-workers/03-02-SUMMARY.md
+Stopped at: Completed 03-03-PLAN.md (Director-Worker Integration)
+Resume file: .planning/phases/03-director-and-workers/03-03-SUMMARY.md

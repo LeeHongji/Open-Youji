@@ -23,7 +23,7 @@
 ### Director (Youji)
 
 - [x] **DIR-01**: Youji responds to mentor messages in Slack threads as a conversational agent
-- [ ] **DIR-02**: Youji can spawn worker agents to execute tasks based on mentor instructions
+- [x] **DIR-02**: Youji can spawn worker agents to execute tasks based on mentor instructions
 - [ ] **DIR-03**: Youji periodically wakes up via cron to check project status across all active projects
 - [ ] **DIR-04**: Youji proactively reports progress, blockers, and pending approvals to mentor via Slack
 - [x] **DIR-05**: Youji decomposes high-level goals from mentor into concrete tasks in TASKS.md
@@ -48,7 +48,7 @@
 
 - [x] **OBS-01**: Every session (director and worker) produces structured metrics (JSONL)
 - [x] **OBS-02**: Session logs are stored for debugging
-- [ ] **OBS-03**: Worker results are summarized and reported to the director
+- [x] **OBS-03**: Worker results are summarized and reported to the director
 
 ## v2 Requirements
 
@@ -94,7 +94,7 @@
 | SLACK-04 | Phase 2 | Complete |
 | SLACK-05 | Phase 2 | Complete |
 | DIR-01 | Phase 3 | Complete |
-| DIR-02 | Phase 3 | Pending |
+| DIR-02 | Phase 3 | Complete |
 | DIR-03 | Phase 4 | Pending |
 | DIR-04 | Phase 4 | Pending |
 | DIR-05 | Phase 3 | Complete |
@@ -110,7 +110,7 @@
 | RES-03 | Phase 4 | Pending |
 | OBS-01 | Phase 1 | Complete |
 | OBS-02 | Phase 1 | Complete |
-| OBS-03 | Phase 3 | Pending |
+| OBS-03 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 27 total
