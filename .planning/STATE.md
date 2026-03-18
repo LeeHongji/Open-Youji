@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-18T06:36:06.004Z"
+last_updated: "2026-03-18T06:41:39Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,30 +18,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Youji runs autonomously as a research institute director -- she talks to the mentor via Slack, schedules and monitors worker agents, and keeps the research program moving forward.
-**Current focus:** Phase 2: Slack Bridge (Socket Mode + thread routing + persistence)
+**Current focus:** Phase 2 complete. Next: Phase 3: Director and Workers
 
 ## Current Position
 
-Phase: 2 of 4 (Slack Bridge) -- IN PROGRESS
-Plan: 2 of 3 in current phase
-Status: Plan 02-02 complete, Plan 02-03 next
-Last activity: 2026-03-18 -- Completed 02-02 SlackBot (Socket Mode + thread key derivation)
+Phase: 2 of 4 (Slack Bridge) -- COMPLETE
+Plan: 3 of 3 in current phase (all complete)
+Status: Phase 2 complete, Phase 3 next
+Last activity: 2026-03-18 -- Completed 02-03 SlackBridge (integration layer + slack.ts update)
 
-Progress: [██████░░░░] 67% (Phase 2)
+Progress: [██████████] 100% (Phase 2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 4 min
-- Total execution time: 0.25 hours
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | 8 min | 4 min |
-| 02-slack-bridge | 2/3 | 7 min | 3.5 min |
+| 02-slack-bridge | 3/3 | 11 min | 3.7 min |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -49,6 +49,7 @@ Progress: [██████░░░░] 67% (Phase 2)
 
 *Updated after each plan completion*
 | Phase 02 P02 | 4 | 2 tasks | 3 files |
+| Phase 02 P03 | 4 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - Zero-dependency promise-based per-key mutex for conversation serialization
 - Inline type assertion for Slack message events (GenericMessageEvent not exported in bolt v4.6)
 - Constructor function mock pattern for vi.mock of @slack/bolt App class
+- Stub response includes message count for testability
+- Error in bridge message handler re-throws after replying with error message
+- startSlackBot opts uses intersection type for backward compat with existing callers
 
 ### Pending Todos
 
@@ -83,5 +87,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-18
-Stopped at: Completed 02-02-PLAN.md (SlackBot + deriveConvKey)
-Resume file: .planning/phases/02-slack-bridge/02-03-PLAN.md
+Stopped at: Completed 02-03-PLAN.md (SlackBridge integration + slack.ts update). Phase 2 complete.
+Resume file: .planning/phases/03-director-workers/03-01-PLAN.md

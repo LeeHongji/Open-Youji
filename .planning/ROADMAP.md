@@ -13,7 +13,7 @@ Open-Youji transforms the existing Youji research institute infrastructure into 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Worktree manager, project scaffold, and session logging infrastructure (completed 2026-03-17)
-- [ ] **Phase 2: Slack Bridge** - Socket Mode connection with thread-to-session routing and reconnection
+- [x] **Phase 2: Slack Bridge** - Socket Mode connection with thread-to-session routing and reconnection (completed 2026-03-18)
 - [ ] **Phase 3: Director and Workers** - Youji director responds in Slack, decomposes tasks, spawns and monitors workers in worktrees
 - [ ] **Phase 4: Autonomous Operation** - Cron-triggered director wake-ups, proactive reporting, and time-based resource accounting
 
@@ -47,8 +47,8 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md -- ThreadStore (SQLite persistence) + ConversationLock (per-thread mutex) [Wave 1]
-- [ ] 02-02-PLAN.md -- SlackBot core (Socket Mode connection, event routing, thread key derivation) [Wave 1]
-- [ ] 02-03-PLAN.md -- SlackBridge integration (wire bot + store + mutex, update slack.ts stub) [Wave 2]
+- [x] 02-02-PLAN.md -- SlackBot core (Socket Mode connection, event routing, thread key derivation) [Wave 1]
+- [x] 02-03-PLAN.md -- SlackBridge integration (wire bot + store + mutex, update slack.ts stub) [Wave 2]
 
 ### Phase 3: Director and Workers
 **Goal**: Mentor can converse with Youji in Slack, and Youji can spawn workers to execute tasks and report results
@@ -89,6 +89,6 @@ Phase 1 and Phase 2 can execute in parallel. Phase 3 depends on both. Phase 4 de
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/2 | Complete    | 2026-03-17 |
-| 2. Slack Bridge | 2/3 | In Progress | - |
+| 2. Slack Bridge | 3/3 | Complete | 2026-03-18 |
 | 3. Director and Workers | 0/3 | Not started | - |
 | 4. Autonomous Operation | 0/2 | Not started | - |
