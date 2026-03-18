@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { SlackBot, deriveConvKey } from "./slack-bot.js";
 import { ThreadStore } from "./thread-store.js";
 import { ConversationLock } from "./thread-mutex.js";
+import { handleDirectorMessage } from "./director.js";
 
 import type { SlackMessage, ReplyFn } from "./slack-bot.js";
 
@@ -21,6 +22,7 @@ export interface SlackBridgeOptions {
 let bot: SlackBot | null = null;
 let store: ThreadStore | null = null;
 let lock: ConversationLock | null = null;
+let repoDir = "";
 
 // ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,7 @@ export async function startSlackBridge(opts: SlackBridgeOptions): Promise<void> 
 
   lock = new ConversationLock();
   store = new ThreadStore(dbPath);
+  repoDir = opts.repoDir;
 
   bot = new SlackBot({
     botToken: opts.botToken,
@@ -80,8 +83,13 @@ async function handleMessage(msg: SlackMessage, reply: ReplyFn): Promise<void> {
     // Load conversation history
     const history = store.getMessages(convKey, { limit: 20 });
 
-    // Phase 2 stub response — director intelligence is Phase 3
-    const response = `Got it. (${history.length} messages in this thread)`;
+    // Director intelligence — Youji responds via Claude SDK session
+    const response = await handleDirectorMessage({
+      convKey,
+      userMessage: msg.text,
+      history,
+      repoDir,
+    });
 
     // Store assistant response
     store.addMessage(convKey, { role: "assistant", content: response });

@@ -22,6 +22,14 @@ vi.mock("./slack-bot.js", () => {
   };
 });
 
+// ── Mock director ───────────────────────────────────────────────────────────────
+
+const mockHandleDirectorMessage = vi.fn(async () => "Director response");
+
+vi.mock("./director.js", () => ({
+  handleDirectorMessage: (...args: unknown[]) => mockHandleDirectorMessage(...args),
+}));
+
 // ── Tests ───────────────────────────────────────────────────────────────────────
 
 describe("slack-bridge", () => {
@@ -34,6 +42,8 @@ describe("slack-bridge", () => {
     capturedOnMessage = null;
     mockStart.mockClear();
     mockStop.mockClear();
+    mockHandleDirectorMessage.mockClear();
+    mockHandleDirectorMessage.mockResolvedValue("Director response");
     vi.resetModules();
 
     // Re-mock after resetModules
@@ -44,6 +54,10 @@ describe("slack-bridge", () => {
       }),
       deriveConvKey: (msg: { channel: string; thread_ts?: string; ts: string }) =>
         `${msg.channel}:${msg.thread_ts ?? msg.ts}`,
+    }));
+
+    vi.doMock("./director.js", () => ({
+      handleDirectorMessage: (...args: unknown[]) => mockHandleDirectorMessage(...args),
     }));
 
     const mod = await import("./slack-bridge.js");
@@ -99,7 +113,9 @@ describe("slack-bridge", () => {
 
   // ── Message handling ──────────────────────────────────────────────────
 
-  it("stores user message and assistant response", async () => {
+  it("calls handleDirectorMessage and replies with its response", async () => {
+    mockHandleDirectorMessage.mockResolvedValue("Youji says hello");
+
     await startSlackBridge({
       botToken: "xoxb-test",
       appToken: "xapp-test",
@@ -112,9 +128,45 @@ describe("slack-bridge", () => {
       reply,
     );
 
-    // Verify reply was called with stub response
     expect(reply).toHaveBeenCalledOnce();
-    expect(reply.mock.calls[0][0]).toContain("Got it.");
+    expect(reply.mock.calls[0][0]).toBe("Youji says hello");
+    expect(mockHandleDirectorMessage).toHaveBeenCalledOnce();
+  });
+
+  it("passes correct opts to handleDirectorMessage", async () => {
+    await startSlackBridge({
+      botToken: "xoxb-test",
+      appToken: "xapp-test",
+      repoDir: tmpDir,
+    });
+
+    const reply = vi.fn(async (_text: string) => {});
+    await capturedOnMessage!(
+      { channel: "C123", user: "U456", text: "Test message", ts: "1.0", threadTs: "1.0" },
+      reply,
+    );
+
+    const callArgs = mockHandleDirectorMessage.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs.convKey).toBe("C123:1.0");
+    expect(callArgs.userMessage).toBe("Test message");
+    expect(callArgs.repoDir).toBe(tmpDir);
+    expect(Array.isArray(callArgs.history)).toBe(true);
+  });
+
+  it("stores user message and director response in ThreadStore", async () => {
+    mockHandleDirectorMessage.mockResolvedValue("Director stored response");
+
+    await startSlackBridge({
+      botToken: "xoxb-test",
+      appToken: "xapp-test",
+      repoDir: tmpDir,
+    });
+
+    const reply = vi.fn(async (_text: string) => {});
+    await capturedOnMessage!(
+      { channel: "C123", user: "U456", text: "Hello", ts: "1234.5678", threadTs: "1234.5678" },
+      reply,
+    );
 
     // Check ThreadStore has both user and assistant messages
     const { ThreadStore } = await import("./thread-store.js");
@@ -126,33 +178,7 @@ describe("slack-bridge", () => {
     expect(messages[0].role).toBe("user");
     expect(messages[0].content).toBe("Hello");
     expect(messages[1].role).toBe("assistant");
-    expect(messages[1].content).toContain("Got it.");
-  });
-
-  it("loads history and includes message count in response", async () => {
-    await startSlackBridge({
-      botToken: "xoxb-test",
-      appToken: "xapp-test",
-      repoDir: tmpDir,
-    });
-
-    const reply = vi.fn(async (_text: string) => {});
-
-    // Send first message
-    await capturedOnMessage!(
-      { channel: "C123", user: "U456", text: "First", ts: "1.0", threadTs: "1.0" },
-      reply,
-    );
-    // After first: 1 user + 1 assistant = 2 messages, but history is loaded AFTER adding user msg
-    expect(reply.mock.calls[0][0]).toContain("1 messages");
-
-    // Send second message in same thread
-    await capturedOnMessage!(
-      { channel: "C123", user: "U456", text: "Second", ts: "2.0", threadTs: "1.0" },
-      reply,
-    );
-    // Now: 2 user + 1 assistant + 1 new user = 3 at time of getMessages
-    expect(reply.mock.calls[1][0]).toContain("3 messages");
+    expect(messages[1].content).toBe("Director stored response");
   });
 
   // ── Concurrency ───────────────────────────────────────────────────────
@@ -189,28 +215,31 @@ describe("slack-bridge", () => {
 
   // ── Error handling ────────────────────────────────────────────────────
 
-  it("releases lock and replies with error on failure", async () => {
+  it("releases lock and replies with error on director failure", async () => {
+    mockHandleDirectorMessage.mockRejectedValueOnce(new Error("Director error"));
+
     await startSlackBridge({
       botToken: "xoxb-test",
       appToken: "xapp-test",
       repoDir: tmpDir,
     });
 
-    // First, cause an error by sending a message, then send another
-    // to verify the lock was released
-    const errorReply = vi.fn(async (_text: string) => {
-      throw new Error("Reply network error");
-    });
+    const reply = vi.fn(async (_text: string) => {});
 
     // This should throw but still release the lock
     await expect(
       capturedOnMessage!(
         { channel: "C123", user: "U456", text: "Fail", ts: "5.0", threadTs: "5.0" },
-        errorReply,
+        reply,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Director error");
+
+    // Error reply should have been sent
+    expect(reply).toHaveBeenCalledOnce();
+    expect(reply.mock.calls[0][0]).toContain("Director error");
 
     // Verify lock is released by sending another message successfully
+    mockHandleDirectorMessage.mockResolvedValue("Recovery response");
     const okReply = vi.fn(async (_text: string) => {});
     await capturedOnMessage!(
       { channel: "C123", user: "U456", text: "OK", ts: "6.0", threadTs: "5.0" },
