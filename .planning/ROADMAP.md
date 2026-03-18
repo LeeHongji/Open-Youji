@@ -75,11 +75,11 @@ Plans:
   1. Youji periodically wakes up via cron to check project status across all active projects without mentor prompting
   2. Youji proactively posts progress summaries, blockers, and pending approvals to the mentor in Slack
   3. Session duration is tracked in wall-clock compute-minutes and budget gates enforce per-project time limits
-**Plans**: TBD
+**Plans**: 2 plans (2 waves)
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- Time budget tracking and enforcement (TDD): getProjectDailyMinutes, checkTimeBudget, wire into worker respawn [Wave 1]
+- [ ] 04-02-PLAN.md -- Cron wake-up and proactive reporting (TDD): proactive-report.ts, hourly check in service.ts, change detection [Wave 2]
 
 ## Progress
 
