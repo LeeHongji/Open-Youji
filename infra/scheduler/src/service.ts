@@ -11,6 +11,7 @@ import { dm, notifyBudgetExceeded } from "./slack.js";
 import { checkTimeBudget } from "./budget-gate.js";
 import { backgroundPushRetry } from "./rebase-push.js";
 import { getWorkerManager } from "./slack-bridge.js";
+import { buildProjectSnapshot, hasChanged, formatProactiveReport, type ProjectSnapshot } from "./proactive-report.js";
 import type { WorkerManager } from "./worker-manager.js";
 import type { Job } from "./types.js";
 
@@ -54,6 +55,10 @@ export class SchedulerService {
   /** Last worker respawn check timestamp (ms). */
   private lastWorkerCheckMs = 0;
   private readonly WORKER_CHECK_INTERVAL_MS = 60_000;
+  /** Last proactive report check timestamp (ms). */
+  private lastProactiveCheckMs = 0;
+  private readonly PROACTIVE_CHECK_INTERVAL_MS = 3_600_000; // 1 hour
+  private lastSnapshots = new Map<string, ProjectSnapshot>();
 
   constructor(opts: ServiceOptions = {}) {
     this.opts = opts;
@@ -267,6 +272,11 @@ export class SchedulerService {
       }
     }
 
+    // Hourly proactive check: survey all projects and report changes
+    if (this.shouldRunProactiveCheck()) {
+      await this.runProactiveCheck();
+    }
+
     // Worker respawn check: scan for projects with open tasks
     if (this.shouldCheckWorkers()) {
       const wm = getWorkerManager();
@@ -315,6 +325,45 @@ export class SchedulerService {
       }
     } catch (err) {
       log(`Worker respawn scan error: ${err}`);
+    }
+  }
+
+  private shouldRunProactiveCheck(): boolean {
+    const now = Date.now();
+    if (now - this.lastProactiveCheckMs < this.PROACTIVE_CHECK_INTERVAL_MS) return false;
+    this.lastProactiveCheckMs = now;
+    return true;
+  }
+
+  private async runProactiveCheck(): Promise<void> {
+    if (!this.opts.repoDir) return;
+    const projectsDir = join(this.opts.repoDir, "projects");
+    if (!existsSync(projectsDir)) return;
+
+    try {
+      const entries = readdirSync(projectsDir, { withFileTypes: true });
+      const changedSnapshots: ProjectSnapshot[] = [];
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const tasksPath = join(projectsDir, entry.name, "TASKS.md");
+        if (!existsSync(tasksPath)) continue;
+
+        const snapshot = await buildProjectSnapshot(entry.name, this.opts.repoDir!, 0);
+        const prev = this.lastSnapshots.get(entry.name) ?? null;
+
+        if (hasChanged(snapshot, prev)) {
+          changedSnapshots.push(snapshot);
+        }
+        this.lastSnapshots.set(entry.name, snapshot);
+      }
+
+      if (changedSnapshots.length > 0) {
+        const report = formatProactiveReport(changedSnapshots);
+        await dm(report).catch((err) => log(`Proactive report DM failed: ${err}`));
+      }
+    } catch (err) {
+      log(`Proactive check error: ${err}`);
     }
   }
 }
