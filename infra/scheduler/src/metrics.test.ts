@@ -853,3 +853,93 @@ describe("fleetResultToMetrics", () => {
 
   });
 });
+
+// ── getProjectDailyMinutes tests ────────────────────────────────────────────
+
+import { getProjectDailyMinutes } from "./metrics.js";
+
+describe("getProjectDailyMinutes", () => {
+  let tmpDir: string;
+  let metricsPath: string;
+
+  beforeEach(async () => {
+    tmpDir = join(tmpdir(), `metrics-daily-test-${Date.now()}`);
+    await mkdir(tmpDir, { recursive: true });
+    metricsPath = join(tmpDir, "sessions.jsonl");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("sums durationMs / 60000 for matching project and day", async () => {
+    // Two sessions for projA on 2026-03-18: 120_000ms (2min) + 180_000ms (3min) = 5min
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-18T10:00:00Z",
+      durationMs: 120_000,
+    }), metricsPath);
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-18T14:00:00Z",
+      durationMs: 180_000,
+    }), metricsPath);
+
+    const minutes = await getProjectDailyMinutes("projA", "2026-03-18", metricsPath);
+    expect(minutes).toBe(5);
+  });
+
+  it("returns 0 when no matching records exist", async () => {
+    const minutes = await getProjectDailyMinutes("projA", "2026-03-18", metricsPath);
+    expect(minutes).toBe(0);
+  });
+
+  it("excludes records from other projects", async () => {
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-18T10:00:00Z",
+      durationMs: 120_000,
+    }), metricsPath);
+    await recordMetrics(session({
+      jobName: "worker:projB",
+      timestamp: "2026-03-18T10:00:00Z",
+      durationMs: 300_000,
+    }), metricsPath);
+
+    const minutes = await getProjectDailyMinutes("projA", "2026-03-18", metricsPath);
+    expect(minutes).toBe(2);
+  });
+
+  it("excludes records from other days", async () => {
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-17T23:59:00Z",
+      durationMs: 600_000,
+    }), metricsPath);
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-18T10:00:00Z",
+      durationMs: 120_000,
+    }), metricsPath);
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-19T00:01:00Z",
+      durationMs: 600_000,
+    }), metricsPath);
+
+    const minutes = await getProjectDailyMinutes("projA", "2026-03-18", metricsPath);
+    expect(minutes).toBe(2);
+  });
+
+  it("rounds to nearest integer minute", async () => {
+    // 90_000ms = 1.5 minutes, should round to 2
+    await recordMetrics(session({
+      jobName: "worker:projA",
+      timestamp: "2026-03-18T10:00:00Z",
+      durationMs: 90_000,
+    }), metricsPath);
+
+    const minutes = await getProjectDailyMinutes("projA", "2026-03-18", metricsPath);
+    expect(minutes).toBe(2);
+  });
+});
