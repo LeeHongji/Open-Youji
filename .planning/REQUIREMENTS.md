@@ -40,8 +40,8 @@
 
 ### Resource Accounting
 
-- [ ] **RES-01**: Session duration (wall-clock minutes) is tracked as the primary resource metric
-- [ ] **RES-02**: Budget gates enforce time-based limits per project (compute-minutes)
+- [x] **RES-01**: Session duration (wall-clock minutes) is tracked as the primary resource metric
+- [x] **RES-02**: Budget gates enforce time-based limits per project (compute-minutes)
 - [ ] **RES-03**: Youji includes time budget status in proactive reports to mentor
 
 ### Observability
@@ -105,8 +105,8 @@
 | WORK-04 | Phase 3 | Complete |
 | WORK-05 | Phase 3 | Complete |
 | WORK-06 | Phase 3 | Complete |
-| RES-01 | Phase 4 | Pending |
-| RES-02 | Phase 4 | Pending |
+| RES-01 | Phase 4 | Complete |
+| RES-02 | Phase 4 | Complete |
 | RES-03 | Phase 4 | Pending |
 | OBS-01 | Phase 1 | Complete |
 | OBS-02 | Phase 1 | Complete |
