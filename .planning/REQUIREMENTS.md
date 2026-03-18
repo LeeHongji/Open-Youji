@@ -31,12 +31,12 @@
 
 ### Worker Orchestration
 
-- [ ] **WORK-01**: Workers execute in isolated git worktrees with their own branch
-- [ ] **WORK-02**: Workers receive a single self-contained task and return results via git commit
-- [ ] **WORK-03**: Worker pushes are serialized through the existing push queue
-- [ ] **WORK-04**: Workers have configurable session timeouts (default 15 min)
-- [ ] **WORK-05**: Zombie workers are detected and terminated (hard timeout + orphan cleanup)
-- [ ] **WORK-06**: Task claiming prevents double-pickup across concurrent workers
+- [x] **WORK-01**: Workers execute in isolated git worktrees with their own branch
+- [x] **WORK-02**: Workers receive a single self-contained task and return results via git commit
+- [x] **WORK-03**: Worker pushes are serialized through the existing push queue
+- [x] **WORK-04**: Workers have configurable session timeouts (default 15 min)
+- [x] **WORK-05**: Zombie workers are detected and terminated (hard timeout + orphan cleanup)
+- [x] **WORK-06**: Task claiming prevents double-pickup across concurrent workers
 
 ### Resource Accounting
 
@@ -99,12 +99,12 @@
 | DIR-04 | Phase 4 | Pending |
 | DIR-05 | Phase 3 | Complete |
 | DIR-06 | Phase 3 | Complete |
-| WORK-01 | Phase 3 | Pending |
-| WORK-02 | Phase 3 | Pending |
-| WORK-03 | Phase 3 | Pending |
-| WORK-04 | Phase 3 | Pending |
-| WORK-05 | Phase 3 | Pending |
-| WORK-06 | Phase 3 | Pending |
+| WORK-01 | Phase 3 | Complete |
+| WORK-02 | Phase 3 | Complete |
+| WORK-03 | Phase 3 | Complete |
+| WORK-04 | Phase 3 | Complete |
+| WORK-05 | Phase 3 | Complete |
+| WORK-06 | Phase 3 | Complete |
 | RES-01 | Phase 4 | Pending |
 | RES-02 | Phase 4 | Pending |
 | RES-03 | Phase 4 | Pending |
