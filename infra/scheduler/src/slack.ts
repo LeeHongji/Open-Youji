@@ -98,20 +98,20 @@ export async function handleBotChannelJoin(): Promise<void> {
 
 // ── Notifications (no-op) ────────────────────────────────────────────────────
 
-export async function notifyBotStarted(): Promise<void> {}
-export async function notifySessionStarted(): Promise<void> {}
-export async function notifySessionComplete(): Promise<void> {}
-export async function notifyPendingApprovals(): Promise<void> {}
-export async function notifyBudgetBlocked(): Promise<void> {}
-export async function notifyEvolution(): Promise<void> {}
-export async function notifyGracefulRestart(): Promise<void> {}
+export async function notifyBotStarted(..._args: unknown[]): Promise<void> {}
+export async function notifySessionStarted(..._args: unknown[]): Promise<{ channel: string; threadTs: string } | null> { return null; }
+export async function notifySessionComplete(..._args: unknown[]): Promise<void> {}
+export async function notifyPendingApprovals(..._args: unknown[]): Promise<void> {}
+export async function notifyBudgetBlocked(..._args: unknown[]): Promise<void> {}
+export async function notifyEvolution(..._args: unknown[]): Promise<void> {}
+export async function notifyGracefulRestart(..._args: unknown[]): Promise<void> {}
 
-export async function notifyFleetCompletion(): Promise<void> {}
-export async function notifyFleetEscalation(): Promise<void> {}
-export async function notifyFleetDrain(): Promise<void> {}
-export async function notifyFleetStarvation(): Promise<void> {}
-export async function notifyFleetLowUtilization(): Promise<void> {}
-export async function notifyFleetStatus(): Promise<void> {}
+export async function notifyFleetCompletion(..._args: unknown[]): Promise<void> {}
+export async function notifyFleetEscalation(..._args: unknown[]): Promise<void> {}
+export async function notifyFleetDrain(..._args: unknown[]): Promise<void> {}
+export async function notifyFleetStarvation(..._args: unknown[]): Promise<void> {}
+export async function notifyFleetLowUtilization(..._args: unknown[]): Promise<void> {}
+export async function notifyFleetStatus(..._args: unknown[]): Promise<void> {}
 
 export async function notifyBudgetExceeded(
   _project: string,
