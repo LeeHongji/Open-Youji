@@ -24,8 +24,8 @@
 
 - [x] **DIR-01**: Youji responds to mentor messages in Slack threads as a conversational agent
 - [x] **DIR-02**: Youji can spawn worker agents to execute tasks based on mentor instructions
-- [ ] **DIR-03**: Youji periodically wakes up via cron to check project status across all active projects
-- [ ] **DIR-04**: Youji proactively reports progress, blockers, and pending approvals to mentor via Slack
+- [x] **DIR-03**: Youji periodically wakes up via cron to check project status across all active projects
+- [x] **DIR-04**: Youji proactively reports progress, blockers, and pending approvals to mentor via Slack
 - [x] **DIR-05**: Youji decomposes high-level goals from mentor into concrete tasks in TASKS.md
 - [x] **DIR-06**: Youji reads and respects existing decision records, conventions, and approval gates
 
@@ -42,7 +42,7 @@
 
 - [x] **RES-01**: Session duration (wall-clock minutes) is tracked as the primary resource metric
 - [x] **RES-02**: Budget gates enforce time-based limits per project (compute-minutes)
-- [ ] **RES-03**: Youji includes time budget status in proactive reports to mentor
+- [x] **RES-03**: Youji includes time budget status in proactive reports to mentor
 
 ### Observability
 
@@ -95,8 +95,8 @@
 | SLACK-05 | Phase 2 | Complete |
 | DIR-01 | Phase 3 | Complete |
 | DIR-02 | Phase 3 | Complete |
-| DIR-03 | Phase 4 | Pending |
-| DIR-04 | Phase 4 | Pending |
+| DIR-03 | Phase 4 | Complete |
+| DIR-04 | Phase 4 | Complete |
 | DIR-05 | Phase 3 | Complete |
 | DIR-06 | Phase 3 | Complete |
 | WORK-01 | Phase 3 | Complete |
@@ -107,7 +107,7 @@
 | WORK-06 | Phase 3 | Complete |
 | RES-01 | Phase 4 | Complete |
 | RES-02 | Phase 4 | Complete |
-| RES-03 | Phase 4 | Pending |
+| RES-03 | Phase 4 | Complete |
 | OBS-01 | Phase 1 | Complete |
 | OBS-02 | Phase 1 | Complete |
 | OBS-03 | Phase 3 | Complete |
