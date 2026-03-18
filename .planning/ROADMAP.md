@@ -60,12 +60,12 @@ Plans:
   3. Workers execute in isolated worktrees, commit results, and push through the serialized push queue without conflicts
   4. Zombie workers are detected and terminated after timeout, and task claiming prevents double-pickup across concurrent workers
   5. Worker results are summarized and reported back to the director for relay to the mentor
-**Plans**: TBD
+**Plans**: 3 plans (2 waves)
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
-- [ ] 03-03: TBD
+- [ ] 03-01-PLAN.md -- Director intelligence (TDD): Youji persona, Claude SDK session with resume, system prompt, task decomposition [Wave 1]
+- [ ] 03-02-PLAN.md -- Worker Manager (TDD): per-project worker lifecycle, task picking, worktree execution, push queue [Wave 1]
+- [ ] 03-03-PLAN.md -- Integration: agent profiles, WorkerManager lifecycle in bridge, completion notifications, periodic respawn [Wave 2]
 
 ### Phase 4: Autonomous Operation
 **Goal**: Youji operates independently via cron, proactively reports to the mentor, and enforces time-based resource budgets
