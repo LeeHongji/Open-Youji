@@ -7,21 +7,24 @@ const mockMessage = vi.fn();
 const mockEvent = vi.fn();
 const mockError = vi.fn();
 
-vi.mock("@slack/bolt", () => ({
-  App: vi.fn().mockImplementation(() => ({
-    start: mockStart,
-    stop: mockStop,
-    message: mockMessage,
-    event: mockEvent,
-    error: mockError,
-  })),
-  LogLevel: {
-    DEBUG: "debug",
-    INFO: "info",
-    WARN: "warn",
-    ERROR: "error",
-  },
-}));
+vi.mock("@slack/bolt", () => {
+  const MockApp = vi.fn(function (this: Record<string, unknown>) {
+    this.start = mockStart;
+    this.stop = mockStop;
+    this.message = mockMessage;
+    this.event = mockEvent;
+    this.error = mockError;
+  });
+  return {
+    App: MockApp,
+    LogLevel: {
+      DEBUG: "debug",
+      INFO: "info",
+      WARN: "warn",
+      ERROR: "error",
+    },
+  };
+});
 
 import { SlackBot, deriveConvKey } from "./slack-bot.js";
 import type { SlackBotOptions, SlackMessage } from "./slack-bot.js";

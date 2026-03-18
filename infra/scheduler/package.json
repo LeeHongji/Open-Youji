@@ -1,0 +1,29 @@
+{
+  "name": "@youji/scheduler",
+  "version": "0.1.0",
+  "description": "Minimal cron scheduler for youji autonomous agent sessions",
+  "type": "module",
+  "bin": {
+    "youji": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "npx tsc",
+    "start": "node dist/cli.js",
+    "test": "npx vitest run",
+    "test:watch": "npx vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.42",
+    "@slack/bolt": "^4.6.0",
+    "better-sqlite3": "^12.6.2",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
+    "croner": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.19.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
