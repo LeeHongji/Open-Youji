@@ -7,7 +7,8 @@ import { computeNextRunAtMs } from "./schedule.js";
 import { executeJob, type ExecutionResult } from "./executor.js";
 import { setDraining } from "./drain-state.js";
 import { runBranchCleanup } from "./branch-cleanup.js";
-import { dm } from "./slack.js";
+import { dm, notifyBudgetExceeded } from "./slack.js";
+import { checkTimeBudget } from "./budget-gate.js";
 import { backgroundPushRetry } from "./rebase-push.js";
 import { getWorkerManager } from "./slack-bridge.js";
 import type { WorkerManager } from "./worker-manager.js";
@@ -298,6 +299,14 @@ export class SchedulerService {
           const content = readFileSync(tasksPath, "utf-8");
           // Check for open tasks: unchecked checkboxes
           if (/^- \[ \]/m.test(content)) {
+            // Check time budget before spawning worker
+            const budgetResult = await checkTimeBudget(entry.name, this.opts.repoDir!);
+            if (!budgetResult.allowed) {
+              wm.stopProject(entry.name);
+              notifyBudgetExceeded(entry.name, budgetResult.usedMinutes, budgetResult.limitMinutes)
+                .catch((err) => log(`Failed to send budget exceeded notification: ${err}`));
+              continue;
+            }
             wm.startProject(entry.name);
           }
         } catch {

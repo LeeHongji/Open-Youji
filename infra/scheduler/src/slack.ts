@@ -113,6 +113,14 @@ export async function notifyFleetStarvation(): Promise<void> {}
 export async function notifyFleetLowUtilization(): Promise<void> {}
 export async function notifyFleetStatus(): Promise<void> {}
 
+export async function notifyBudgetExceeded(
+  _project: string,
+  _usedMinutes: number,
+  _limitMinutes: number,
+): Promise<void> {
+  // no-op — real implementation wired when Slack is configured
+}
+
 export async function notifyWorkerCompletion(
   _project: string,
   _taskText: string,

@@ -662,7 +662,7 @@ describe("SchedulerService worker respawn budget check", () => {
     await new Promise((r) => setTimeout(r, 100));
     service.stop();
 
-    expect(mockedCheckTimeBudget).toHaveBeenCalledWith("projA", repoDir, undefined);
+    expect(mockedCheckTimeBudget).toHaveBeenCalledWith("projA", repoDir);
     expect(mockWm.startProject).toHaveBeenCalledWith("projA");
   });
 
