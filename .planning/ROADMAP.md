@@ -63,7 +63,7 @@ Plans:
 **Plans**: 3 plans (2 waves)
 
 Plans:
-- [ ] 03-01-PLAN.md -- Director intelligence (TDD): Youji persona, Claude SDK session with resume, system prompt, task decomposition [Wave 1]
+- [x] 03-01-PLAN.md -- Director intelligence (TDD): Youji persona, Claude SDK session with resume, system prompt, task decomposition [Wave 1]
 - [ ] 03-02-PLAN.md -- Worker Manager (TDD): per-project worker lifecycle, task picking, worktree execution, push queue [Wave 1]
 - [ ] 03-03-PLAN.md -- Integration: agent profiles, WorkerManager lifecycle in bridge, completion notifications, periodic respawn [Wave 2]
 
@@ -90,5 +90,5 @@ Phase 1 and Phase 2 can execute in parallel. Phase 3 depends on both. Phase 4 de
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/2 | Complete    | 2026-03-17 |
 | 2. Slack Bridge | 3/3 | Complete    | 2026-03-18 |
-| 3. Director and Workers | 0/3 | Not started | - |
+| 3. Director and Workers | 1/3 | In progress | - |
 | 4. Autonomous Operation | 0/2 | Not started | - |
