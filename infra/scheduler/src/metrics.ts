@@ -271,6 +271,29 @@ export async function countMetrics(metricsPath?: string): Promise<number> {
   return content.split("\n").filter((line) => line.trim()).length;
 }
 
+/**
+ * Aggregate daily compute-minutes for a specific project from JSONL metrics.
+ * Sums durationMs for records where jobName includes the project name
+ * and timestamp falls on the specified day (UTC).
+ */
+export async function getProjectDailyMinutes(
+  project: string,
+  dayIso: string,
+  metricsPath?: string,
+): Promise<number> {
+  const since = `${dayIso}T00:00:00`;
+  const nextDay = new Date(dayIso + "T00:00:00Z");
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const until = nextDay.toISOString().slice(0, 10) + "T00:00:00";
+
+  const metrics = await readMetrics({ since, metricsPath });
+  const projectMs = metrics
+    .filter((m) => m.timestamp < until)
+    .filter((m) => m.jobName.includes(project))
+    .reduce((sum, m) => sum + m.durationMs, 0);
+  return Math.round(projectMs / 60_000);
+}
+
 // ── Interaction logging ───────────────────────────────────────────────────────
 
 export interface InteractionRecord {

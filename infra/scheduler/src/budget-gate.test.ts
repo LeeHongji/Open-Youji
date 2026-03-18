@@ -3,9 +3,13 @@ import { checkBudget } from "./budget-gate.js";
 import type { Job } from "./types.js";
 import type { BudgetStatus } from "./notify.js";
 
-vi.mock("./notify.js", () => ({
-  readAllBudgetStatuses: vi.fn(),
-}));
+vi.mock("./notify.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./notify.js")>();
+  return {
+    ...actual,
+    readAllBudgetStatuses: vi.fn(),
+  };
+});
 
 vi.mock("./constants.js", () => ({
   EXCLUDED_PROJECTS: [],
