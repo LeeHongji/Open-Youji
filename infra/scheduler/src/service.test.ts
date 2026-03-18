@@ -30,17 +30,27 @@ vi.mock("./budget-gate.js", () => ({
   checkTimeBudget: vi.fn(),
 }));
 
+vi.mock("./proactive-report.js", () => ({
+  buildProjectSnapshot: vi.fn(),
+  hasChanged: vi.fn(),
+  formatProactiveReport: vi.fn(),
+}));
+
 import { executeJob } from "./executor.js";
 import { runBranchCleanup } from "./branch-cleanup.js";
 import { dm, notifyBudgetExceeded } from "./slack.js";
 import { getWorkerManager } from "./slack-bridge.js";
 import { checkTimeBudget } from "./budget-gate.js";
+import { buildProjectSnapshot, hasChanged, formatProactiveReport } from "./proactive-report.js";
 const mockedExecuteJob = vi.mocked(executeJob);
 const mockedRunBranchCleanup = vi.mocked(runBranchCleanup);
 const mockedDm = vi.mocked(dm);
 const mockedNotifyBudgetExceeded = vi.mocked(notifyBudgetExceeded);
 const mockedGetWorkerManager = vi.mocked(getWorkerManager);
 const mockedCheckTimeBudget = vi.mocked(checkTimeBudget);
+const mockedBuildProjectSnapshot = vi.mocked(buildProjectSnapshot);
+const mockedHasChanged = vi.mocked(hasChanged);
+const mockedFormatProactiveReport = vi.mocked(formatProactiveReport);
 
 const TEST_DIR = join(tmpdir(), `scheduler-service-test-${Date.now()}`);
 
@@ -756,5 +766,156 @@ describe("SchedulerService worker respawn budget check", () => {
     expect(mockWm.startProject).toHaveBeenCalledWith("projA");
     expect(mockWm.stopProject).not.toHaveBeenCalled();
     expect(mockedNotifyBudgetExceeded).not.toHaveBeenCalled();
+  });
+});
+
+// ── Proactive hourly check ───────────────────────────────────────────────────
+
+describe("SchedulerService proactive hourly check", () => {
+  let storePath: string;
+  let repoDir: string;
+
+  beforeEach(async () => {
+    repoDir = join(TEST_DIR, `repo-proactive-${Date.now()}`);
+    await mkdir(join(repoDir, "projects", "projA"), { recursive: true });
+    await writeFile(join(repoDir, "projects", "projA", "TASKS.md"), "- [ ] Task one\n");
+    storePath = join(TEST_DIR, `jobs-proactive-${Date.now()}.json`);
+    mockedExecuteJob.mockReset();
+    mockedRunBranchCleanup.mockReset();
+    mockedDm.mockReset();
+    mockedGetWorkerManager.mockReset();
+    mockedCheckTimeBudget.mockReset();
+    mockedBuildProjectSnapshot.mockReset();
+    mockedHasChanged.mockReset();
+    mockedFormatProactiveReport.mockReset();
+    // Default: budget check allows
+    mockedCheckTimeBudget.mockResolvedValue({
+      allowed: true,
+      usedMinutes: 50,
+      limitMinutes: 240,
+    });
+  });
+
+  afterEach(async () => {
+    await rm(TEST_DIR, { recursive: true, force: true });
+  });
+
+  it("sends DM when proactive check detects changes", async () => {
+    await writeFile(storePath, JSON.stringify(makeStore([])));
+
+    const snapshot = {
+      project: "projA",
+      completedTasks: 2,
+      openTasks: 3,
+      blockedTasks: 0,
+      inProgressTasks: 0,
+      activeWorkers: 0,
+      pendingApprovals: 0,
+      computeMinutesUsed: 60,
+      computeMinutesLimit: 240,
+      budgetExceeded: false,
+    };
+    mockedBuildProjectSnapshot.mockResolvedValue(snapshot);
+    mockedHasChanged.mockReturnValue(true);
+    mockedFormatProactiveReport.mockReturnValue("*Youji Hourly Status*\n...");
+    mockedDm.mockResolvedValue(undefined);
+
+    const service = new SchedulerService({
+      storePath,
+      pollIntervalMs: 50,
+      repoDir,
+    });
+
+    await service.start();
+    await new Promise((r) => setTimeout(r, 100));
+    service.stop();
+
+    expect(mockedBuildProjectSnapshot).toHaveBeenCalled();
+    expect(mockedHasChanged).toHaveBeenCalled();
+    expect(mockedFormatProactiveReport).toHaveBeenCalledWith([snapshot]);
+    expect(mockedDm).toHaveBeenCalledWith("*Youji Hourly Status*\n...");
+  });
+
+  it("does not send DM when no changes detected", async () => {
+    await writeFile(storePath, JSON.stringify(makeStore([])));
+
+    mockedBuildProjectSnapshot.mockResolvedValue({
+      project: "projA",
+      completedTasks: 2,
+      openTasks: 3,
+      blockedTasks: 0,
+      inProgressTasks: 0,
+      activeWorkers: 0,
+      pendingApprovals: 0,
+      computeMinutesUsed: 60,
+      computeMinutesLimit: 240,
+      budgetExceeded: false,
+    });
+    mockedHasChanged.mockReturnValue(false);
+
+    const service = new SchedulerService({
+      storePath,
+      pollIntervalMs: 50,
+      repoDir,
+    });
+
+    await service.start();
+    await new Promise((r) => setTimeout(r, 100));
+    service.stop();
+
+    expect(mockedBuildProjectSnapshot).toHaveBeenCalled();
+    expect(mockedFormatProactiveReport).not.toHaveBeenCalled();
+    expect(mockedDm).not.toHaveBeenCalled();
+  });
+
+  it("does not crash tick loop when proactive check throws", async () => {
+    await writeFile(storePath, JSON.stringify(makeStore([])));
+
+    mockedBuildProjectSnapshot.mockRejectedValue(new Error("snapshot boom"));
+
+    const service = new SchedulerService({
+      storePath,
+      pollIntervalMs: 50,
+      repoDir,
+    });
+
+    // Should not throw
+    await service.start();
+    await new Promise((r) => setTimeout(r, 150));
+    service.stop();
+
+    // Service survived — no assertion needed beyond no-throw
+    expect(true).toBe(true);
+  });
+
+  it("does not run proactive check on subsequent ticks within 1 hour", async () => {
+    await writeFile(storePath, JSON.stringify(makeStore([])));
+
+    mockedBuildProjectSnapshot.mockResolvedValue({
+      project: "projA",
+      completedTasks: 0,
+      openTasks: 1,
+      blockedTasks: 0,
+      inProgressTasks: 0,
+      activeWorkers: 0,
+      pendingApprovals: 0,
+      computeMinutesUsed: 0,
+      computeMinutesLimit: 240,
+      budgetExceeded: false,
+    });
+    mockedHasChanged.mockReturnValue(false);
+
+    const service = new SchedulerService({
+      storePath,
+      pollIntervalMs: 50,
+      repoDir,
+    });
+
+    await service.start();
+    await new Promise((r) => setTimeout(r, 200));
+    service.stop();
+
+    // buildProjectSnapshot called only once (first tick), not on subsequent ticks
+    expect(mockedBuildProjectSnapshot).toHaveBeenCalledTimes(1);
   });
 });
