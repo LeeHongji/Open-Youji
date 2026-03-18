@@ -113,6 +113,26 @@ export async function notifyFleetStarvation(): Promise<void> {}
 export async function notifyFleetLowUtilization(): Promise<void> {}
 export async function notifyFleetStatus(): Promise<void> {}
 
+export async function notifyWorkerCompletion(
+  _project: string,
+  _taskText: string,
+  _summary: string,
+  _durationMs: number,
+  _costUsd: number,
+  _diffRef: string,
+): Promise<void> {
+  // no-op — real implementation wired when Slack is configured
+}
+
+export async function notifyWorkerFailure(
+  _project: string,
+  _taskText: string,
+  _error: string,
+  _retried: boolean,
+): Promise<void> {
+  // no-op
+}
+
 export function formatThreadMessages(): string {
   return "";
 }
