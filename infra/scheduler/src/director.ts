@@ -40,7 +40,7 @@ export async function handleDirectorMessage(opts: DirectorMessageOpts): Promise<
     const result = await runQuery({
       prompt: opts.userMessage,
       cwd: opts.repoDir,
-      model: "opus",
+      model: "sonnet",
       systemPrompt: {
         type: "preset" as const,
         preset: "claude_code" as const,
@@ -50,7 +50,7 @@ export async function handleDirectorMessage(opts: DirectorMessageOpts): Promise<
       allowDangerouslySkipPermissions: true,
       maxTurns: 16,
       resume: storedSessionId ?? undefined,
-      settingSources: ["project", "user"],
+      settingSources: ["project"],
     });
 
     if (result.sessionId) {
@@ -66,7 +66,7 @@ export async function handleDirectorMessage(opts: DirectorMessageOpts): Promise<
       const result = await runQuery({
         prompt: historyPrompt,
         cwd: opts.repoDir,
-        model: "opus",
+        model: "sonnet",
         systemPrompt: {
           type: "preset" as const,
           preset: "claude_code" as const,
@@ -75,7 +75,7 @@ export async function handleDirectorMessage(opts: DirectorMessageOpts): Promise<
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
         maxTurns: 16,
-        settingSources: ["project", "user"],
+        settingSources: ["project"],
       });
 
       if (result.sessionId) {
