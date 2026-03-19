@@ -6,7 +6,7 @@
  * to no-op stubs so the scheduler runs without Slack.
  */
 
-import { startSlackBridge, stopSlackBridge } from "./slack-bridge.js";
+import { startSlackBridge, stopSlackBridge, getBot } from "./slack-bridge.js";
 
 export type YoujiCommandInput = Record<string, unknown>;
 export type YoujiCommandResult = {
@@ -45,13 +45,41 @@ export async function stopSlackBot(): Promise<void> {
   await stopSlackBridge();
 }
 
-export async function dm(_text: string): Promise<string | undefined> {
-  // no-op
-  return undefined;
+export async function dm(text: string): Promise<string | undefined> {
+  const slackBot = getBot();
+  const userId = process.env.SLACK_USER_ID;
+  if (!slackBot || !userId) return undefined;
+
+  try {
+    const app = slackBot.getApp();
+    // Open a DM channel with the mentor
+    const conv = await app.client.conversations.open({ users: userId });
+    const channel = conv.channel?.id;
+    if (!channel) return undefined;
+
+    const result = await app.client.chat.postMessage({ channel, text });
+    return result.ts;
+  } catch (err) {
+    console.error("[slack] dm failed:", err instanceof Error ? err.message : err);
+    return undefined;
+  }
 }
 
-export async function dmThread(_threadTs: string, _text: string): Promise<void> {
-  // no-op
+export async function dmThread(threadTs: string, text: string): Promise<void> {
+  const slackBot = getBot();
+  const userId = process.env.SLACK_USER_ID;
+  if (!slackBot || !userId) return;
+
+  try {
+    const app = slackBot.getApp();
+    const conv = await app.client.conversations.open({ users: userId });
+    const channel = conv.channel?.id;
+    if (!channel) return;
+
+    await app.client.chat.postMessage({ channel, text, thread_ts: threadTs });
+  } catch (err) {
+    console.error("[slack] dmThread failed:", err instanceof Error ? err.message : err);
+  }
 }
 
 export async function dmBlocks(_blocksText: string): Promise<string | undefined> {
@@ -114,31 +142,37 @@ export async function notifyFleetLowUtilization(..._args: unknown[]): Promise<vo
 export async function notifyFleetStatus(..._args: unknown[]): Promise<void> {}
 
 export async function notifyBudgetExceeded(
-  _project: string,
-  _usedMinutes: number,
-  _limitMinutes: number,
+  project: string,
+  usedMinutes: number,
+  limitMinutes: number,
 ): Promise<void> {
-  // no-op — real implementation wired when Slack is configured
+  const hours = (usedMinutes / 60).toFixed(1);
+  const limit = (limitMinutes / 60).toFixed(0);
+  await dm(`:no_entry: *${project}* — Budget exceeded: ${hours}h / ${limit}h. Worker stopped.`);
 }
 
 export async function notifyWorkerCompletion(
-  _project: string,
-  _taskText: string,
-  _summary: string,
-  _durationMs: number,
-  _costUsd: number,
-  _diffRef: string,
+  project: string,
+  taskText: string,
+  summary: string,
+  durationMs: number,
+  costUsd: number,
+  diffRef: string,
 ): Promise<void> {
-  // no-op — real implementation wired when Slack is configured
+  const mins = (durationMs / 60_000).toFixed(1);
+  const task = taskText.length > 80 ? taskText.slice(0, 77) + "..." : taskText;
+  await dm(`:white_check_mark: *${project}* — Task done: ${task}\n_${mins}min, $${costUsd.toFixed(2)}, branch: ${diffRef}_\n${summary.slice(0, 200)}`);
 }
 
 export async function notifyWorkerFailure(
-  _project: string,
-  _taskText: string,
-  _error: string,
-  _retried: boolean,
+  project: string,
+  taskText: string,
+  error: string,
+  retried: boolean,
 ): Promise<void> {
-  // no-op
+  const task = taskText.length > 80 ? taskText.slice(0, 77) + "..." : taskText;
+  const retryNote = retried ? " (retried once)" : "";
+  await dm(`:x: *${project}* — Task failed${retryNote}: ${task}\n_Error: ${error.slice(0, 200)}_`);
 }
 
 export function formatThreadMessages(): string {

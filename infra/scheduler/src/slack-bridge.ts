@@ -100,6 +100,11 @@ export function getWorkerManager(): WorkerManager | null {
   return workerManager;
 }
 
+/** Get the SlackBot instance for sending proactive messages (null if bridge not started). */
+export function getBot(): SlackBot | null {
+  return bot;
+}
+
 // ── Worker completion handler ──────────────────────────────────────────────────
 
 function handleWorkerCompletion(event: WorkerCompletionEvent): void {
