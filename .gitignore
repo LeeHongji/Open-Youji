@@ -24,3 +24,6 @@ reports/
 *.jpg
 *.jpeg
 .failed-evolution.json
+.DS_Store
+.cursor/
+.youji/

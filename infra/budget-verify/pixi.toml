@@ -1,0 +1,15 @@
+[workspace]
+channels = ["conda-forge"]
+name = "budget-verify"
+platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+budget-status = "python budget-status.py"
+auto-ledger = "python auto-ledger.py"
+ledger-update = "python auto-ledger.py --yaml"
+verify = "python verify.py"
+
+[dependencies]
+python = "3.12.*"
+pyyaml = ">=6"
