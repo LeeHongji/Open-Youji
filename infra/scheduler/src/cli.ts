@@ -240,8 +240,8 @@ async function cmdStart(): Promise<void> {
   acquireLock(lockfilePath);
 
   // Set up living message disk persistence directory
-  // @ts-expect-error pre-existing type mismatch
-  setPersistenceDir(persistBaseDir);
+  // setPersistenceDir is from reference implementation — no-op in Open-Youji
+  try { const g = globalThis as never as Record<string, CallableFunction>; if (g["setPersistenceDir"]) g["setPersistenceDir"](persistBaseDir); } catch { /* no-op */ }
 
   // Track HEAD before each job for verification
   const headBeforeMap = new Map<string, string | null>();
